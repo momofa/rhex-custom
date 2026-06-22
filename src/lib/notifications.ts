@@ -1,0 +1,240 @@
+﻿import { NotificationType, RelatedType } from "@/db/types"
+
+import { findRootCommentPageById } from "@/db/comment-queries"
+import { countUnreadNotifications, findCommentsWithPostByIds, findNotificationsByUserIdCursor, findPostsByIds, findUsersByIds } from "@/db/notification-read-queries"
+import { decodeTimestampCursor, encodeTimestampCursor } from "@/lib/cursor-pagination"
+import { formatMonthDayTime } from "@/lib/formatters"
+import { getCachedUnreadNotificationCount } from "@/lib/notification-redis-cache"
+import { normalizeNotificationUrl } from "@/lib/notification-url"
+import { getAnonymousMaskDisplayIdentity } from "@/lib/post-anonymous"
+import { getPostCommentPath, getPostPath } from "@/lib/post-links"
+import { getSiteSettings } from "@/lib/site-settings"
+import { applyHookedUserPresentationToNamedItem } from "@/lib/user-presentation-server"
+import { getUserDisplayName } from "@/lib/users"
+
+
+
+const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
+  REPLY_POST: "回复了你的帖子",
+  REPLY_COMMENT: "回复了你的评论",
+  LIKE: "赞了你的内容",
+  MENTION: "提到了你",
+  FOLLOWED_YOU: "关注了你",
+  FOLLOWING_ACTIVITY: "关注动态",
+  SYSTEM: "系统通知",
+  REPORT_RESULT: "举报处理结果",
+}
+
+export interface SiteNotificationItem {
+  id: string
+  type: NotificationType
+  typeLabel: string
+  title: string
+  content: string
+  isRead: boolean
+  createdAt: string
+  senderName: string
+  relatedUrl: string
+}
+
+export interface UserNotificationsResult {
+  items: SiteNotificationItem[]
+  hasPrevPage: boolean
+  hasNextPage: boolean
+  prevCursor: string | null
+  nextCursor: string | null
+}
+
+export async function getUserUnreadNotificationCount(userId: number) {
+  try {
+    return await getCachedUnreadNotificationCount(userId, () => countUnreadNotifications(userId))
+  } catch (error) {
+    console.error(error)
+    return 0
+  }
+}
+
+
+type NotificationPostTarget = Awaited<ReturnType<typeof findPostsByIds>>[number]
+type NotificationCommentTarget = Awaited<ReturnType<typeof findCommentsWithPostByIds>>[number]
+type NotificationUserTarget = Awaited<ReturnType<typeof findUsersByIds>>[number]
+type NotificationCursorRows = Awaited<ReturnType<typeof findNotificationsByUserIdCursor>>["items"]
+
+async function preloadNotificationTargets(notifications: NotificationCursorRows) {
+  const postIds = notifications.filter((item) => item.relatedType === RelatedType.POST).map((item) => item.relatedId)
+  const commentIds = notifications.filter((item) => item.relatedType === RelatedType.COMMENT).map((item) => item.relatedId)
+  const userIds = notifications.filter((item) => item.relatedType === RelatedType.USER).map((item) => item.relatedId)
+
+  const [posts, comments, users] = await Promise.all([findPostsByIds(postIds), findCommentsWithPostByIds(commentIds), findUsersByIds(userIds)])
+
+  return {
+    postMap: new Map<string, NotificationPostTarget>(posts.map((post) => [post.id, post])),
+    commentMap: new Map<string, NotificationCommentTarget>(comments.map((comment) => [comment.id, comment])),
+    userMap: new Map<string, NotificationUserTarget>(users.map((user) => [String(user.id), user])),
+  }
+}
+
+async function resolveNotificationUrl(
+  customUrl: string | null | undefined,
+  relatedType: RelatedType,
+  relatedId: string,
+  settings: Awaited<ReturnType<typeof getSiteSettings>>,
+  targets: Awaited<ReturnType<typeof preloadNotificationTargets>>,
+  rootCommentPageCache: Map<string, Promise<number>>,
+) {
+  const normalizedCustomUrl = normalizeNotificationUrl(customUrl)
+  if (normalizedCustomUrl) {
+    return normalizedCustomUrl
+  }
+
+  if (relatedType === RelatedType.POST) {
+    const post = targets.postMap.get(relatedId)
+
+    return post ? getPostPath({ id: post.id, slug: post.slug }, settings.postLinkDisplayMode) : "/notifications"
+  }
+
+  if (relatedType === RelatedType.COMMENT) {
+    const comment = targets.commentMap.get(relatedId)
+
+    if (!comment?.post) {
+      return "/notifications"
+    }
+
+    const rootCommentId = comment.parentId ?? comment.id
+    const cacheKey = `${comment.post.id}:${rootCommentId}`
+    let rootCommentPagePromise = rootCommentPageCache.get(cacheKey)
+
+    if (!rootCommentPagePromise) {
+      rootCommentPagePromise = findRootCommentPageById({
+        postId: comment.post.id,
+        rootCommentId,
+        pageSize: settings.commentPageSize,
+        sort: "oldest",
+      })
+      rootCommentPageCache.set(cacheKey, rootCommentPagePromise)
+    }
+
+    const page = await rootCommentPagePromise
+    return getPostCommentPath(
+      { id: comment.post.id, slug: comment.post.slug },
+      comment.id,
+      {
+        mode: settings.postLinkDisplayMode,
+        sort: "oldest",
+        view: "tree",
+        page,
+        highlight: comment.id,
+      },
+    )
+  }
+
+  if (relatedType === RelatedType.USER) {
+    const user = targets.userMap.get(relatedId)
+
+    return user ? `/users/${user.username}` : "/notifications"
+  }
+
+  if (relatedType === RelatedType.YINYANG_CHALLENGE) {
+    return "/funs/yinyang-contract"
+  }
+
+  return "/notifications"
+}
+
+
+
+
+export async function getUserNotifications(
+  userId: number,
+  options: {
+    pageSize: number
+    after?: string | null
+    before?: string | null
+    unreadOnly?: boolean
+  },
+): Promise<UserNotificationsResult> {
+  try {
+    const normalizedPageSize = Math.min(50, Math.max(1, options.pageSize))
+    const afterCursor = decodeTimestampCursor(options.after)
+    const beforeCursor = decodeTimestampCursor(options.before)
+
+    const [{ items: notifications, hasPrevPage, hasNextPage }, settings] = await Promise.all([
+      findNotificationsByUserIdCursor({
+        userId,
+        take: normalizedPageSize,
+        after: beforeCursor ? null : afterCursor,
+        before: beforeCursor,
+        unreadOnly: options.unreadOnly,
+      }),
+      getSiteSettings(),
+    ])
+
+    const targets = await preloadNotificationTargets(notifications)
+    const rootCommentPageCache = new Map<string, Promise<number>>()
+    const relatedUrls = await Promise.all(
+      notifications.map((notification) => resolveNotificationUrl(
+        notification.url,
+        notification.relatedType,
+        notification.relatedId,
+        settings,
+        targets,
+        rootCommentPageCache,
+      )),
+    )
+
+    const hasAnonymousCommentNotification = notifications.some((notification) => {
+      if (notification.relatedType !== RelatedType.COMMENT) {
+        return false
+      }
+
+      const comment = targets.commentMap.get(notification.relatedId)
+      return Boolean(comment?.post?.isAnonymous && comment.useAnonymousIdentity)
+    })
+    const anonymousMaskIdentity = hasAnonymousCommentNotification ? await getAnonymousMaskDisplayIdentity() : null
+
+    const items = await Promise.all(notifications.map(async (notification, index) => {
+      const commentTarget = notification.relatedType === RelatedType.COMMENT
+        ? targets.commentMap.get(notification.relatedId)
+        : null
+      const shouldMaskSender = Boolean(commentTarget?.post?.isAnonymous && commentTarget.useAnonymousIdentity)
+      const sender = notification.sender
+        ? await applyHookedUserPresentationToNamedItem({
+            username: shouldMaskSender ? (anonymousMaskIdentity?.username ?? "anonymous-user") : notification.sender.username,
+            displayName: shouldMaskSender
+              ? (anonymousMaskIdentity?.name ?? anonymousMaskIdentity?.username ?? "匿名用户")
+              : getUserDisplayName(notification.sender, "系统"),
+            displayedBadges: [],
+          })
+        : null
+
+      return {
+        id: notification.id,
+        type: notification.type,
+        typeLabel: NOTIFICATION_TYPE_LABELS[notification.type],
+        title: notification.title,
+        content: notification.content,
+        isRead: notification.isRead,
+        createdAt: formatMonthDayTime(notification.createdAt),
+        senderName: sender?.displayName ?? "系统",
+        relatedUrl: relatedUrls[index],
+      }
+    }))
+
+    return {
+      items,
+      hasPrevPage,
+      hasNextPage,
+      prevCursor: notifications.length > 0 ? encodeTimestampCursor({ id: notifications[0].id, createdAt: notifications[0].createdAt.toISOString() }) : null,
+      nextCursor: notifications.length > 0 ? encodeTimestampCursor({ id: notifications[notifications.length - 1].id, createdAt: notifications[notifications.length - 1].createdAt.toISOString() }) : null,
+    }
+  } catch (error) {
+    console.error(error)
+    return {
+      items: [],
+      hasPrevPage: false,
+      hasNextPage: false,
+      prevCursor: null,
+      nextCursor: null,
+    }
+  }
+}

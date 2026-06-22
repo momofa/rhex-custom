@@ -1,0 +1,138 @@
+x-app-environment: &app-environment
+  DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-bbs}?schema=public
+  REDIS_URL: redis://redis:6379
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  REDIS_DB: ${REDIS_DB:-}
+
+x-app-service: &app-service
+  image: ghcr.io/lovedevpanda/rhex:latest
+  pull_policy: always
+  init: true
+  env_file:
+    - .env
+  volumes:
+    - ./uploads:/app/uploads
+    - ./addons:/app/addons
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bbs}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      # Use TCP readiness so dependent containers don't start while initdb's socket-only server is running.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-bbs}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:latest
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        if [ -n "$${REDIS_PASSWORD:-}" ]; then
+          exec redis-server --appendonly yes --requirepass "$${REDIS_PASSWORD}"
+        fi
+        exec redis-server --appendonly yes
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "if [ -n \"$${REDIS_PASSWORD:-}\" ]; then redis-cli -a \"$${REDIS_PASSWORD}\" --no-auth-warning ping; else redis-cli ping; fi"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  setup:
+    <<: *app-service
+    restart: on-failure
+    environment: *app-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["pnpm", "run", "setup:prod"]
+
+  postgres-backup:
+    image: postgres:18
+    profiles:
+      - backup
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-bbs}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - ./backups:/backups
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        mkdir -p /backups
+        pg_dump -h postgres -U "$${POSTGRES_USER:-postgres}" -d "$${POSTGRES_DB:-bbs}" -Fc -f "/backups/rhex-$$(date +%Y%m%d-%H%M%S).dump"
+
+  web:
+    <<: *app-service
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      <<: *app-environment
+      HOSTNAME: ${HOSTNAME:-0.0.0.0}
+      PORT: ${PORT:-3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+        restart: true
+      redis:
+        condition: service_healthy
+        restart: true
+      setup:
+        condition: service_completed_successfully
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    command: ["pnpm", "run", "start"]
+
+  worker:
+    <<: *app-service
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      <<: *app-environment
+      INTERNAL_REVALIDATION_ORIGIN: ${INTERNAL_REVALIDATION_ORIGIN:-http://web:${PORT:-3000}}
+    depends_on:
+      postgres:
+        condition: service_healthy
+        restart: true
+      redis:
+        condition: service_healthy
+        restart: true
+      setup:
+        condition: service_completed_successfully
+    command: ["pnpm", "run", "worker"]
+
+volumes:
+  postgres_data:
+  redis_data:

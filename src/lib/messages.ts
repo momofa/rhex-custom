@@ -1,0 +1,1176 @@
+import { prisma } from "@/db/client"
+import { DbTransaction, withDbTransaction } from "@/db/helpers"
+import {
+  findConversationByIdForParticipant,
+  findConversationDetailById,
+  findConversationListItems,
+  findDirectConversationByUsers,
+  findLatestMessageByConversationId,
+  getUnreadConversationCount,
+  updateConversationReadState,
+} from "@/db/message-read-queries"
+import {
+  createDirectMessageInTransaction,
+  findConversationHistoryBatch,
+  findMessageHistoryAnchor,
+  findMessageRecipientById,
+} from "@/db/message-write-queries"
+import { ConversationKind, Prisma, UserStatus } from "@/db/types"
+
+import { apiError } from "@/lib/api-route"
+import { enforceSensitiveText } from "@/lib/content-safety"
+import { formatMonthDayTime } from "@/lib/formatters"
+import { isImageOnlyMarkdownHtml, renderMarkdown } from "@/lib/markdown/render"
+import {
+  containsMessageFileToken,
+  containsMessageImageSyntax,
+  protectMessageMediaTokens,
+  summarizeMessagePreview,
+} from "@/lib/message-media"
+import {
+  type CachedSiteChatMessageRecord,
+  getCachedMessageConversationList,
+  getCachedSiteChatMessages,
+  getCachedUnreadMessageCount,
+  invalidateMessageUserCache,
+  invalidateSiteChatCache,
+} from "@/lib/message-redis-cache"
+import { messageEventBus } from "@/lib/message-event-bus"
+import { isPublicRouteError } from "@/lib/public-route-error"
+import {
+  createSiteChatParticipant,
+  insertSiteChatConversationFirst,
+  isSiteChatConversationId,
+  SITE_CHAT_CONVERSATION_ID,
+  SITE_CHAT_EMPTY_PREVIEW,
+  SITE_CHAT_PARTICIPANT_ID,
+  SITE_CHAT_ROOM_DB_ID,
+  SITE_CHAT_SUBTITLE,
+  SITE_CHAT_TITLE,
+  SITE_CHAT_UPDATED_AT_PLACEHOLDER,
+} from "@/lib/site-chat"
+import { getSiteSettings } from "@/lib/site-settings"
+import { getUserDisplayName } from "@/lib/user-display"
+import { ensureUsersCanInteract } from "@/lib/user-blocks"
+import type { AdminActor } from "@/lib/moderator-permissions"
+import type {
+  MessageBubbleItem,
+  MessageCenterData,
+  MessageConversationDetail,
+  MessageConversationListItem,
+  MessageDeletedStreamEvent,
+  MessageHistoryResult,
+  MessageParticipantProfile,
+  MessageSendResult,
+} from "@/lib/message-types"
+
+type MessageTransactionClient = DbTransaction
+
+const INITIAL_MESSAGE_PAGE_SIZE = 20
+const MESSAGE_HISTORY_BATCH_SIZE = 20
+
+export async function assertMessageFeatureEnabled() {
+  const settings = await getSiteSettings()
+
+  if (!settings.messageEnabled) {
+    apiError(403, "当前站点未开启私信功能")
+  }
+
+  return settings
+}
+
+type MessageRecipientRecord = NonNullable<Awaited<ReturnType<typeof findMessageRecipientById>>>
+type SiteChatMessageSendResult = MessageSendResult & { participantUserIds: number[] }
+type SiteChatMessageDeleteActor = AdminActor
+type SiteChatLatestMessageForDeletion = {
+  id: string
+  body: string
+  createdAt: Date
+  senderId: number
+  sender: {
+    username: string
+    nickname: string | null
+    avatarPath: string | null
+  }
+}
+export interface SiteChatMessageDeleteResult {
+  messageId: string
+  latestMessage?: MessageDeletedStreamEvent["latestMessage"]
+}
+type DirectConversationListEntry = {
+  id: string
+  kind: "DIRECT"
+  title: string
+  subtitle: string
+  preview: string
+  updatedAt: string
+  unreadCount: number
+  participants: MessageParticipantProfile[]
+  sortAt: Date
+}
+
+type ResolvedConversationReference =
+  | { kind: "database"; conversationId: string }
+  | { kind: "draft"; recipient: MessageRecipientRecord }
+
+function normalizeMessageCenterError(error: unknown) {
+  if (isPublicRouteError(error)) {
+    return error.message
+  }
+
+  return "私信加载失败，请稍后重试"
+}
+
+function mapUserProfile(
+  user: {
+    id: number
+    username: string
+    nickname: string | null
+    avatarPath: string | null
+  },
+  currentUserId: number,
+): MessageParticipantProfile {
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.id === currentUserId ? "我" : getUserDisplayName(user),
+    avatarPath: user.avatarPath,
+    isCurrentUser: user.id === currentUserId,
+  }
+}
+
+function mapConversationParticipant(
+  participant: {
+    userId: number
+    user: {
+      id: number
+      username: string
+      nickname: string | null
+      avatarPath: string | null
+    }
+  },
+  currentUserId: number,
+): MessageParticipantProfile {
+  return mapUserProfile(participant.user, currentUserId)
+}
+
+function mapMessageBubble(
+  message: {
+    id: string
+    body: string
+    createdAt: Date
+    senderId: number
+    sender: {
+      id: number
+      username: string
+      nickname: string | null
+      avatarPath: string | null
+    }
+  },
+  currentUserId: number,
+  markdownEmojiMap?: Awaited<ReturnType<typeof getSiteSettings>>["markdownEmojiMap"],
+  options?: {
+    displayCurrentUserAsSelf?: boolean
+  },
+): MessageBubbleItem {
+  const bodyHtml = markdownEmojiMap ? renderMarkdown(message.body.replace(/\r\n/g, "\n").trim(), markdownEmojiMap) : undefined
+  const displayCurrentUserAsSelf = options?.displayCurrentUserAsSelf ?? true
+
+  return {
+    id: message.id,
+    body: message.body,
+    ...(bodyHtml ? {
+      bodyHtml,
+      bodyImageOnly: isImageOnlyMarkdownHtml(bodyHtml),
+    } : {}),
+    createdAt: formatMonthDayTime(message.createdAt),
+    occurredAt: message.createdAt.toISOString(),
+    senderId: message.senderId,
+    senderUsername: message.sender.username,
+    senderName: message.senderId === currentUserId && displayCurrentUserAsSelf ? "我" : getUserDisplayName(message.sender),
+    senderAvatarPath: message.sender.avatarPath,
+    isMine: message.senderId === currentUserId,
+  }
+}
+
+async function removeConversationForUser(tx: MessageTransactionClient, conversationId: string, currentUserId: number) {
+  await tx.conversationParticipant.updateMany({
+    where: {
+      conversationId,
+      userId: currentUserId,
+      archivedAt: null,
+    },
+    data: {
+      archivedAt: new Date(),
+      unreadCount: 0,
+    },
+  })
+}
+
+async function restoreConversationForUser(tx: MessageTransactionClient, conversationId: string, currentUserId: number) {
+  await tx.conversationParticipant.updateMany({
+    where: {
+      conversationId,
+      userId: currentUserId,
+      archivedAt: {
+        not: null,
+      },
+    },
+    data: {
+      archivedAt: null,
+    },
+  })
+}
+
+function normalizeDirectPair(userAId: number, userBId: number) {
+  return {
+    userLowId: Math.min(userAId, userBId),
+    userHighId: Math.max(userAId, userBId),
+  }
+}
+
+function isUniqueConstraintError(error: unknown, target?: string) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+    return false
+  }
+
+  if (!target) {
+    return true
+  }
+
+  const errorTarget = Array.isArray(error.meta?.target) ? error.meta.target.join(",") : String(error.meta?.target ?? "")
+  return errorTarget.includes(target)
+}
+
+async function isSiteChatEnabled() {
+  const settings = await getSiteSettings()
+  return Boolean(settings.siteChatEnabled)
+}
+
+async function ensureSiteChatConversation() {
+  return prisma.conversation.upsert({
+    where: {
+      id: SITE_CHAT_ROOM_DB_ID,
+    },
+    update: {
+      kind: ConversationKind.GROUP,
+    },
+    create: {
+      id: SITE_CHAT_ROOM_DB_ID,
+      kind: ConversationKind.GROUP,
+    },
+  })
+}
+
+async function ensureSiteChatParticipant(userId: number) {
+  await ensureSiteChatConversation()
+
+  return prisma.conversationParticipant.upsert({
+    where: {
+      conversationId_userId: {
+        conversationId: SITE_CHAT_ROOM_DB_ID,
+        userId,
+      },
+    },
+    update: {
+      archivedAt: null,
+    },
+    create: {
+      conversationId: SITE_CHAT_ROOM_DB_ID,
+      userId,
+      unreadCount: 0,
+    },
+  })
+}
+
+async function getSiteChatParticipantUnreadCount(currentUserId: number) {
+  const participant = await prisma.conversationParticipant.findUnique({
+    where: {
+      conversationId_userId: {
+        conversationId: SITE_CHAT_ROOM_DB_ID,
+        userId: currentUserId,
+      },
+    },
+    select: {
+      unreadCount: true,
+      archivedAt: true,
+    },
+  })
+
+  return participant && participant.archivedAt === null
+    ? participant.unreadCount
+    : 0
+}
+
+async function loadSiteChatMessages(messageLimit: number): Promise<CachedSiteChatMessageRecord[]> {
+  await ensureSiteChatConversation()
+
+  return prisma.directMessage.findMany({
+    where: {
+      conversationId: SITE_CHAT_ROOM_DB_ID,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: messageLimit,
+    include: {
+      sender: {
+        select: {
+          id: true,
+          username: true,
+          nickname: true,
+          avatarPath: true,
+        },
+      },
+    },
+  })
+}
+
+async function findSiteChatConversationWithMessages(messageLimit: number) {
+  return {
+    messages: await getCachedSiteChatMessages(messageLimit, () => loadSiteChatMessages(messageLimit)),
+  }
+}
+
+async function buildSiteChatConversationListItem(currentUserId: number): Promise<MessageConversationListItem> {
+  const [conversation, unreadCount] = await Promise.all([
+    findSiteChatConversationWithMessages(1),
+    getSiteChatParticipantUnreadCount(currentUserId),
+  ])
+  const latestMessage = conversation?.messages[0]
+
+  return {
+    id: SITE_CHAT_CONVERSATION_ID,
+    kind: "SITE_CHAT",
+    title: SITE_CHAT_TITLE,
+    subtitle: unreadCount > 0 ? `未读 ${unreadCount} 条` : latestMessage ? SITE_CHAT_SUBTITLE : "聊天室已开启",
+    preview: latestMessage ? summarizeMessagePreview(latestMessage.body) : SITE_CHAT_EMPTY_PREVIEW,
+    updatedAt: latestMessage ? formatMonthDayTime(latestMessage.createdAt) : SITE_CHAT_UPDATED_AT_PLACEHOLDER,
+    unreadCount,
+    participants: [createSiteChatParticipant()],
+  }
+}
+
+async function markSiteChatConversationAsRead(currentUserId: number) {
+  await ensureSiteChatParticipant(currentUserId)
+  const latestMessage = await findLatestMessageByConversationId(SITE_CHAT_ROOM_DB_ID)
+
+  await updateConversationReadState(SITE_CHAT_ROOM_DB_ID, currentUserId, latestMessage?.id)
+}
+
+async function getSiteChatConversationDetail(currentUserId: number): Promise<MessageConversationDetail | null> {
+  if (!await isSiteChatEnabled()) {
+    return null
+  }
+
+  const [settings, conversation] = await Promise.all([
+    getSiteSettings(),
+    ensureSiteChatParticipant(currentUserId).then(() => findSiteChatConversationWithMessages(INITIAL_MESSAGE_PAGE_SIZE + 1)),
+  ])
+
+  if (!conversation) {
+    return null
+  }
+
+  const orderedMessages = [...conversation.messages].reverse()
+  const hasMoreHistory = orderedMessages.length > INITIAL_MESSAGE_PAGE_SIZE
+  const visibleMessages = hasMoreHistory ? orderedMessages.slice(1) : orderedMessages
+
+  await markSiteChatConversationAsRead(currentUserId)
+
+  return {
+    id: SITE_CHAT_CONVERSATION_ID,
+    kind: "SITE_CHAT",
+    title: SITE_CHAT_TITLE,
+    subtitle: visibleMessages.length > 0 ? SITE_CHAT_SUBTITLE : SITE_CHAT_EMPTY_PREVIEW,
+    updatedAt: visibleMessages.length > 0
+      ? formatMonthDayTime(visibleMessages[visibleMessages.length - 1].createdAt)
+      : SITE_CHAT_UPDATED_AT_PLACEHOLDER,
+    participants: [createSiteChatParticipant()],
+    hasMoreHistory,
+    messages: visibleMessages.map((message) => mapMessageBubble(message, currentUserId, settings.markdownEmojiMap, {
+      displayCurrentUserAsSelf: false,
+    })),
+  }
+}
+
+async function sanitizeOutgoingMessageBody(body: string) {
+  const content = body.trim()
+
+  if (!content) {
+    apiError(400, "消息内容不能为空")
+  }
+
+  if (content.length > 1000) {
+    apiError(400, "消息内容不能超过 1000 个字符")
+  }
+
+  const settings = await assertMessageFeatureEnabled()
+  if (containsMessageImageSyntax(content) && !settings.messageImageUploadEnabled) {
+    apiError(403, "当前站点未开启私信图片发送")
+  }
+
+  if (containsMessageFileToken(content) && !settings.messageFileUploadEnabled) {
+    apiError(403, "当前站点未开启私信文件发送")
+  }
+
+  const protectedContent = protectMessageMediaTokens(content)
+  const contentSafety = await enforceSensitiveText({
+    scene: "message.body",
+    text: protectedContent.protectedText,
+  })
+
+  return {
+    sanitizedContent: protectedContent.restore(contentSafety.sanitizedText),
+    contentAdjusted: contentSafety.wasReplaced,
+  }
+}
+
+async function sendSiteChatMessage(senderId: number, body: string): Promise<SiteChatMessageSendResult> {
+  if (!await isSiteChatEnabled()) {
+    apiError(403, "当前站点未开启全站聊天室")
+  }
+
+  const { sanitizedContent, contentAdjusted } = await sanitizeOutgoingMessageBody(body)
+  await ensureSiteChatParticipant(senderId)
+
+  const sender = await findMessageRecipientById(senderId)
+  const message = await prisma.$transaction(async (tx) => {
+    const created = await tx.directMessage.create({
+      data: {
+        conversationId: SITE_CHAT_ROOM_DB_ID,
+        senderId,
+        body: sanitizedContent,
+      },
+    })
+
+    await tx.conversation.update({
+      where: {
+        id: SITE_CHAT_ROOM_DB_ID,
+      },
+      data: {
+        lastMessageAt: created.createdAt,
+      },
+    })
+
+    await tx.conversationParticipant.updateMany({
+      where: {
+        conversationId: SITE_CHAT_ROOM_DB_ID,
+        userId: senderId,
+      },
+      data: {
+        unreadCount: 0,
+        lastReadMessageId: created.id,
+        archivedAt: null,
+      },
+    })
+
+    await tx.conversationParticipant.updateMany({
+      where: {
+        conversationId: SITE_CHAT_ROOM_DB_ID,
+        userId: {
+          not: senderId,
+        },
+        archivedAt: null,
+      },
+      data: {
+        unreadCount: {
+          increment: 1,
+        },
+      },
+    })
+
+    return created
+  })
+  await invalidateSiteChatCache()
+
+  const occurredAt = message.createdAt.toISOString()
+  const senderDisplayName = sender ? getUserDisplayName(sender) : "用户"
+  const senderUsername = sender?.username ?? ""
+  const senderAvatarPath = sender?.avatarPath ?? null
+
+  await messageEventBus.publish({
+    type: "message.created",
+    conversationId: SITE_CHAT_CONVERSATION_ID,
+    messageId: message.id,
+    content: message.body,
+    createdAtLabel: formatMonthDayTime(message.createdAt),
+    senderId,
+    senderUsername,
+    senderDisplayName,
+    senderAvatarPath,
+    recipientId: SITE_CHAT_PARTICIPANT_ID,
+    broadcast: "site-chat",
+    occurredAt,
+  })
+
+  return {
+    id: message.id,
+    conversationId: SITE_CHAT_CONVERSATION_ID,
+    content: message.body,
+    createdAt: formatMonthDayTime(message.createdAt),
+    occurredAt,
+    senderUsername,
+    senderDisplayName,
+    senderAvatarPath,
+    contentAdjusted: Boolean(contentAdjusted),
+    participantUserIds: [senderId],
+  }
+}
+
+function mapSiteChatDeletedEventLatestMessage(
+  message: SiteChatLatestMessageForDeletion | null,
+): MessageDeletedStreamEvent["latestMessage"] | undefined {
+  if (!message) {
+    return undefined
+  }
+
+  return {
+    messageId: message.id,
+    content: message.body,
+    createdAtLabel: formatMonthDayTime(message.createdAt),
+    senderId: message.senderId,
+    senderUsername: message.sender.username,
+    senderDisplayName: getUserDisplayName(message.sender),
+    senderAvatarPath: message.sender.avatarPath,
+    occurredAt: message.createdAt.toISOString(),
+  }
+}
+
+export async function deleteSiteChatMessageForAdmin(
+  messageId: string,
+  actor: SiteChatMessageDeleteActor,
+): Promise<SiteChatMessageDeleteResult> {
+  await assertMessageFeatureEnabled()
+
+  const { ensureAdminActorPermission } = await import("@/lib/admin-scope-permissions")
+  await ensureAdminActorPermission(actor, "admin.operations.manage", "无权删除全站聊天室消息")
+
+  const result = await prisma.$transaction(async (tx) => {
+    const message = await tx.directMessage.findFirst({
+      where: {
+        id: messageId,
+        conversationId: SITE_CHAT_ROOM_DB_ID,
+      },
+      include: {
+        sender: {
+          select: {
+            username: true,
+            nickname: true,
+            avatarPath: true,
+          },
+        },
+      },
+    })
+
+    if (!message) {
+      apiError(404, "聊天消息不存在或已删除")
+    }
+
+    await tx.directMessage.delete({
+      where: {
+        id: message.id,
+      },
+    })
+
+    const previousMessage = await tx.directMessage.findFirst({
+      where: {
+        conversationId: SITE_CHAT_ROOM_DB_ID,
+        OR: [
+          { createdAt: { lt: message.createdAt } },
+          {
+            createdAt: message.createdAt,
+            id: { lt: message.id },
+          },
+        ],
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: {
+        id: true,
+      },
+    })
+
+    await tx.conversationParticipant.updateMany({
+      where: {
+        conversationId: SITE_CHAT_ROOM_DB_ID,
+        archivedAt: null,
+        userId: {
+          not: message.senderId,
+        },
+        OR: [
+          { lastReadMessageId: null },
+          {
+            lastReadMessage: {
+              createdAt: {
+                lt: message.createdAt,
+              },
+            },
+          },
+          {
+            lastReadMessage: {
+              createdAt: message.createdAt,
+              id: {
+                lt: message.id,
+              },
+            },
+          },
+        ],
+        unreadCount: {
+          gt: 0,
+        },
+      },
+      data: {
+        unreadCount: {
+          decrement: 1,
+        },
+      },
+    })
+
+    await tx.conversationParticipant.updateMany({
+      where: {
+        conversationId: SITE_CHAT_ROOM_DB_ID,
+        lastReadMessageId: message.id,
+      },
+      data: {
+        lastReadMessageId: previousMessage?.id ?? null,
+      },
+    })
+
+    const latestMessage = await tx.directMessage.findFirst({
+      where: {
+        conversationId: SITE_CHAT_ROOM_DB_ID,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      include: {
+        sender: {
+          select: {
+            username: true,
+            nickname: true,
+            avatarPath: true,
+          },
+        },
+      },
+    })
+
+    if (latestMessage) {
+      await tx.conversation.update({
+        where: {
+          id: SITE_CHAT_ROOM_DB_ID,
+        },
+        data: {
+          lastMessageAt: latestMessage.createdAt,
+        },
+      })
+    }
+
+    return {
+      latestMessage,
+    }
+  })
+
+  await invalidateSiteChatCache()
+
+  const latestMessage = mapSiteChatDeletedEventLatestMessage(result.latestMessage)
+  const occurredAt = new Date().toISOString()
+
+  await messageEventBus.publish({
+    type: "message.deleted",
+    conversationId: SITE_CHAT_CONVERSATION_ID,
+    messageId,
+    deletedByUserId: actor.id,
+    latestMessage,
+    broadcast: "site-chat",
+    occurredAt,
+  })
+
+  return {
+    messageId,
+    latestMessage,
+  }
+}
+
+async function getOrCreateConversation(userAId: number, userBId: number) {
+  const pair = normalizeDirectPair(userAId, userBId)
+  const existing = await findDirectConversationByUsers(pair.userLowId, pair.userHighId)
+
+  if (existing) {
+    await withDbTransaction(async (tx) => {
+      await restoreConversationForUser(tx, existing.conversationId, userAId)
+    })
+    await invalidateMessageUserCache(userAId)
+
+    return existing.conversation
+  }
+
+  try {
+    return await withDbTransaction(async (tx) => {
+      const conversation = await tx.conversation.create({
+        data: {
+          kind: ConversationKind.DIRECT,
+          participants: {
+            create: [
+              { userId: userAId, unreadCount: 0 },
+              { userId: userBId, unreadCount: 0 },
+            ],
+          },
+        },
+        include: {
+          participants: true,
+        },
+      })
+
+      await tx.directConversation.create({
+        data: {
+          conversationId: conversation.id,
+          userLowId: pair.userLowId,
+          userHighId: pair.userHighId,
+        },
+      })
+
+      return conversation
+    })
+  } catch (error) {
+    if (!isUniqueConstraintError(error, "userLowId")) {
+      throw error
+    }
+
+    const concurrentConversation = await findDirectConversationByUsers(pair.userLowId, pair.userHighId)
+    if (!concurrentConversation) {
+      throw error
+    }
+
+    await withDbTransaction(async (tx) => {
+      await restoreConversationForUser(tx, concurrentConversation.conversationId, userAId)
+    })
+    await invalidateMessageUserCache(userAId)
+
+    return concurrentConversation.conversation
+  }
+}
+
+async function resolveCanonicalConversationId(currentUserId: number, conversationId: string): Promise<string | undefined> {
+  const conversation = await findConversationByIdForParticipant(conversationId, currentUserId)
+  if (!conversation) {
+    return undefined
+  }
+
+  const partnerIds = conversation.participants
+    .map((participant) => participant.userId)
+    .filter((userId) => userId !== currentUserId)
+
+  return partnerIds.length === 1 && conversation.participants.length === 2
+    ? conversation.id
+    : undefined
+}
+
+async function loadDatabaseBackedConversations(currentUserId: number): Promise<MessageConversationListItem[]> {
+  const items = await findConversationListItems(currentUserId)
+
+  return items
+    .map((item) => {
+      const participants = item.conversation.participants.map((participant) => mapConversationParticipant(participant, currentUserId))
+      const partner = participants.find((participant) => !participant.isCurrentUser)
+
+      if (!partner) {
+        return null
+      }
+
+      const latestMessage = item.conversation.messages[0]
+      const sortAt = latestMessage?.createdAt ?? item.conversation.lastMessageAt
+
+      return {
+        id: item.conversation.id,
+        kind: "DIRECT" as const,
+        title: partner.displayName,
+        subtitle: item.unreadCount > 0 ? `未读 ${item.unreadCount} 条` : latestMessage ? "最近互动" : "新会话",
+        preview: latestMessage ? summarizeMessagePreview(latestMessage.body) : "还没有消息，发一条开始聊天吧",
+        updatedAt: formatMonthDayTime(sortAt),
+        unreadCount: item.unreadCount,
+        participants,
+        sortAt,
+      }
+    })
+    .filter((conversation): conversation is DirectConversationListEntry => Boolean(conversation))
+    .sort((left, right) => right.sortAt.getTime() - left.sortAt.getTime())
+    .map((conversation) => ({
+      id: conversation.id,
+      kind: conversation.kind,
+      title: conversation.title,
+      subtitle: conversation.subtitle,
+      preview: conversation.preview,
+      updatedAt: conversation.updatedAt,
+      unreadCount: conversation.unreadCount,
+      participants: conversation.participants,
+    }))
+}
+
+async function getDatabaseBackedConversations(currentUserId: number): Promise<MessageConversationListItem[]> {
+  return getCachedMessageConversationList(currentUserId, () => loadDatabaseBackedConversations(currentUserId))
+}
+
+export async function getUnreadMessageConversationCount(currentUserId: number) {
+  const settings = await getSiteSettings()
+
+  if (!settings.messageEnabled) {
+    return 0
+  }
+
+  return getCachedUnreadMessageCount(currentUserId, () => getUnreadConversationCount(currentUserId))
+}
+
+export async function markConversationAsRead(conversationId: string, currentUserId: number) {
+  await assertMessageFeatureEnabled()
+
+  if (isSiteChatConversationId(conversationId)) {
+    if (await isSiteChatEnabled()) {
+      await markSiteChatConversationAsRead(currentUserId)
+      await invalidateMessageUserCache(currentUserId)
+    }
+    return
+  }
+
+  const canonicalConversationId = await resolveCanonicalConversationId(currentUserId, conversationId)
+  if (!canonicalConversationId) {
+    return
+  }
+
+  const latestMessage = await findLatestMessageByConversationId(canonicalConversationId)
+  await updateConversationReadState(canonicalConversationId, currentUserId, latestMessage?.id)
+  await invalidateMessageUserCache(currentUserId)
+}
+
+async function getDatabaseConversationDetail(currentUserId: number, conversationId: string): Promise<MessageConversationDetail | null> {
+  const canonicalConversationId = await resolveCanonicalConversationId(currentUserId, conversationId)
+  if (!canonicalConversationId) {
+    return null
+  }
+
+  const [conversation, settings] = await Promise.all([
+    findConversationDetailById(canonicalConversationId, currentUserId, INITIAL_MESSAGE_PAGE_SIZE),
+    getSiteSettings(),
+  ])
+  if (!conversation) {
+    return null
+  }
+
+  const participants = conversation.participants.map((participant) => mapConversationParticipant(participant, currentUserId))
+  const partner = participants.find((participant) => !participant.isCurrentUser)
+
+  if (!partner) {
+    return null
+  }
+
+  const orderedMessages = [...conversation.messages].reverse()
+  const hasMoreHistory = orderedMessages.length > INITIAL_MESSAGE_PAGE_SIZE
+  const visibleMessages = hasMoreHistory ? orderedMessages.slice(1) : orderedMessages
+
+  await markConversationAsRead(conversation.id, currentUserId)
+
+  return {
+    id: conversation.id,
+    kind: "DIRECT",
+    title: partner.displayName,
+    subtitle: visibleMessages.length > 0 ? "实时会话" : "还没有聊天记录，发一条消息开始聊天吧",
+    updatedAt: formatMonthDayTime(visibleMessages.at(-1)?.createdAt ?? conversation.lastMessageAt),
+    participants,
+    recipientId: partner.id,
+    hasMoreHistory,
+    messages: visibleMessages.map((message) => mapMessageBubble(message, currentUserId, settings.markdownEmojiMap)),
+  }
+}
+
+async function getValidatedMessageRecipient(
+  currentUserId: number,
+  targetUserId: number,
+  messages: {
+    blockedMessage: string
+    blockedByMessage: string
+  },
+): Promise<MessageRecipientRecord> {
+  if (currentUserId === targetUserId) {
+    apiError(400, "不能给自己发送私信")
+  }
+
+  await ensureUsersCanInteract({
+    actorId: currentUserId,
+    targetUserId,
+    blockedMessage: messages.blockedMessage,
+    blockedByMessage: messages.blockedByMessage,
+  })
+
+  const recipient = await findMessageRecipientById(targetUserId)
+  if (!recipient || recipient.status !== UserStatus.ACTIVE) {
+    apiError(400, "接收方不存在或不可接收私信")
+  }
+
+  return recipient
+}
+
+function buildDraftConversationDetail(currentUserId: number, recipient: MessageRecipientRecord): MessageConversationDetail {
+  const participant = mapUserProfile(recipient, currentUserId)
+
+  return {
+    id: `user-${recipient.id}`,
+    kind: "DIRECT",
+    title: participant.displayName,
+    subtitle: "还没有聊天记录，发一条消息开始聊天吧",
+    updatedAt: "待发送",
+    participants: [participant],
+    recipientId: recipient.id,
+    hasMoreHistory: false,
+    messages: [],
+  }
+}
+
+async function resolveConversationReference(currentUserId: number, conversationId?: string): Promise<ResolvedConversationReference | undefined> {
+  if (!conversationId) {
+    return undefined
+  }
+
+  if (conversationId.startsWith("user-")) {
+    const targetUserId = Number(conversationId.replace("user-", ""))
+
+    if (Number.isFinite(targetUserId)) {
+      const recipient = await getValidatedMessageRecipient(currentUserId, targetUserId, {
+        blockedMessage: "你已拉黑该用户，无法发起私信",
+        blockedByMessage: "对方已将你拉黑，无法发起私信",
+      })
+      const pair = normalizeDirectPair(currentUserId, targetUserId)
+      const existingConversation = await findDirectConversationByUsers(pair.userLowId, pair.userHighId)
+
+      if (existingConversation) {
+        const latestMessage = await findLatestMessageByConversationId(existingConversation.conversationId)
+
+        if (latestMessage) {
+          await withDbTransaction(async (tx) => {
+            await restoreConversationForUser(tx, existingConversation.conversationId, currentUserId)
+          })
+          await invalidateMessageUserCache(currentUserId)
+
+          return {
+            kind: "database",
+            conversationId: existingConversation.conversationId,
+          }
+        }
+      }
+
+      return {
+        kind: "draft",
+        recipient,
+      }
+    }
+  }
+
+  const canonicalConversationId = await resolveCanonicalConversationId(currentUserId, conversationId)
+  if (!canonicalConversationId) {
+    return undefined
+  }
+
+  return {
+    kind: "database",
+    conversationId: canonicalConversationId,
+  }
+}
+
+export async function getMessageConversationDetail(currentUserId: number, conversationId: string): Promise<MessageConversationDetail | null> {
+  await assertMessageFeatureEnabled()
+
+  if (isSiteChatConversationId(conversationId)) {
+    return getSiteChatConversationDetail(currentUserId)
+  }
+
+  const resolvedConversation = await resolveConversationReference(currentUserId, conversationId)
+
+  return resolvedConversation?.kind === "database"
+    ? await getDatabaseConversationDetail(currentUserId, resolvedConversation.conversationId)
+    : resolvedConversation?.kind === "draft"
+      ? buildDraftConversationDetail(currentUserId, resolvedConversation.recipient)
+      : null
+}
+
+export async function sendDirectMessage(
+  senderId: number,
+  recipientId: number | undefined,
+  body: string,
+  options?: {
+    conversationId?: string
+  },
+): Promise<MessageSendResult | SiteChatMessageSendResult> {
+  await assertMessageFeatureEnabled()
+
+  if (isSiteChatConversationId(options?.conversationId)) {
+    return sendSiteChatMessage(senderId, body)
+  }
+
+  if (typeof recipientId !== "number" || !Number.isFinite(recipientId)) {
+    apiError(400, "缺少接收方信息")
+  }
+
+  const { sanitizedContent, contentAdjusted } = await sanitizeOutgoingMessageBody(body)
+  const recipient = await getValidatedMessageRecipient(senderId, recipientId, {
+    blockedMessage: "你已拉黑该用户，无法发送私信",
+    blockedByMessage: "对方已将你拉黑，无法发送私信",
+  })
+
+  const conversation = await getOrCreateConversation(senderId, recipient.id)
+  const message = await createDirectMessageInTransaction(conversation.id, senderId, recipient.id, sanitizedContent)
+  const sender = await findMessageRecipientById(senderId)
+  await invalidateMessageUserCache([senderId, recipient.id])
+  const recipientUnreadMessageCount = await getCachedUnreadMessageCount(recipient.id, () => getUnreadConversationCount(recipient.id))
+  const occurredAt = message.createdAt.toISOString()
+  const senderDisplayName = sender ? getUserDisplayName(sender) : "用户"
+  const senderUsername = sender?.username ?? ""
+  const senderAvatarPath = sender?.avatarPath ?? null
+
+  await messageEventBus.publish({
+    type: "message.created",
+    conversationId: conversation.id,
+    messageId: message.id,
+    content: message.body,
+    createdAtLabel: formatMonthDayTime(message.createdAt),
+    senderId,
+    senderUsername,
+    senderDisplayName,
+    senderAvatarPath,
+    recipientId: recipient.id,
+    recipientUnreadMessageCount,
+    occurredAt,
+  })
+
+  return {
+    id: message.id,
+    conversationId: conversation.id,
+    content: message.body,
+    createdAt: formatMonthDayTime(message.createdAt),
+    occurredAt,
+    senderUsername,
+    senderDisplayName,
+    senderAvatarPath,
+    contentAdjusted: Boolean(contentAdjusted),
+  }
+}
+
+export async function getConversationHistory(currentUserId: number, conversationId: string, beforeMessageId: string): Promise<MessageHistoryResult> {
+  await assertMessageFeatureEnabled()
+
+  if (isSiteChatConversationId(conversationId)) {
+    if (!await isSiteChatEnabled()) {
+      apiError(404, "会话不存在或无权查看")
+    }
+
+    const [settings, anchor] = await Promise.all([
+      getSiteSettings(),
+      findMessageHistoryAnchor(beforeMessageId, SITE_CHAT_ROOM_DB_ID),
+    ])
+
+    if (!anchor) {
+      apiError(404, "历史消息定位失败")
+    }
+
+    const history = await findConversationHistoryBatch(SITE_CHAT_ROOM_DB_ID, anchor.createdAt, MESSAGE_HISTORY_BATCH_SIZE)
+    const hasMoreHistory = history.length > MESSAGE_HISTORY_BATCH_SIZE
+    const visibleHistory = hasMoreHistory ? history.slice(0, MESSAGE_HISTORY_BATCH_SIZE) : history
+
+    return {
+      messages: visibleHistory.reverse().map((message) => mapMessageBubble(message, currentUserId, settings.markdownEmojiMap, {
+        displayCurrentUserAsSelf: false,
+      })),
+      hasMoreHistory,
+    }
+  }
+
+  const canonicalConversationId = await resolveCanonicalConversationId(currentUserId, conversationId)
+  if (!canonicalConversationId) {
+    apiError(404, "会话不存在或无权查看")
+  }
+
+  const anchor = await findMessageHistoryAnchor(beforeMessageId, canonicalConversationId)
+  if (!anchor) {
+    apiError(404, "历史消息定位失败")
+  }
+
+  const [history, settings] = await Promise.all([
+    findConversationHistoryBatch(canonicalConversationId, anchor.createdAt, MESSAGE_HISTORY_BATCH_SIZE),
+    getSiteSettings(),
+  ])
+  const hasMoreHistory = history.length > MESSAGE_HISTORY_BATCH_SIZE
+  const visibleHistory = hasMoreHistory ? history.slice(0, MESSAGE_HISTORY_BATCH_SIZE) : history
+
+  return {
+    messages: visibleHistory.reverse().map((message) => mapMessageBubble(message, currentUserId, settings.markdownEmojiMap)),
+    hasMoreHistory,
+  }
+}
+
+export async function deleteConversationForUser(conversationId: string, currentUserId: number) {
+  await assertMessageFeatureEnabled()
+
+  if (isSiteChatConversationId(conversationId)) {
+    apiError(400, "全站聊天室不支持删除")
+  }
+
+  const canonicalConversationId = await resolveCanonicalConversationId(currentUserId, conversationId)
+  if (!canonicalConversationId) {
+    apiError(404, "会话不存在或无权删除")
+  }
+
+  await withDbTransaction(async (tx) => {
+    await removeConversationForUser(tx, canonicalConversationId, currentUserId)
+  })
+  await invalidateMessageUserCache(currentUserId)
+}
+
+export async function getMessageCenterData(currentUserId: number, conversationId?: string): Promise<MessageCenterData> {
+  try {
+    const siteSettings = await getSiteSettings()
+
+    if (!siteSettings.messageEnabled) {
+      return {
+        conversations: [],
+        activeConversation: null,
+        usingDemoData: false,
+        errorMessage: null,
+      }
+    }
+
+    const databaseConversations = await getDatabaseBackedConversations(currentUserId)
+    const siteChatConversation = siteSettings.siteChatEnabled
+      ? await buildSiteChatConversationListItem(currentUserId)
+      : null
+    const conversations = siteChatConversation
+      ? insertSiteChatConversationFirst(databaseConversations, siteChatConversation)
+      : databaseConversations
+    let activeConversation: MessageConversationDetail | null = null
+    let errorMessage: string | null = null
+
+    if (conversationId) {
+      try {
+        activeConversation = await getMessageConversationDetail(currentUserId, conversationId)
+      } catch (error) {
+        errorMessage = normalizeMessageCenterError(error)
+
+        if (!isPublicRouteError(error)) {
+          console.error("[messages] failed to resolve active conversation", error)
+        }
+      }
+    }
+
+    return {
+      conversations,
+      activeConversation,
+      usingDemoData: false,
+      errorMessage,
+    }
+  } catch (error) {
+    console.error("[messages] failed to load message center", error)
+
+    return {
+      conversations: [],
+      activeConversation: null,
+      usingDemoData: false,
+      errorMessage: normalizeMessageCenterError(error),
+    }
+  }
+}

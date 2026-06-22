@@ -1,0 +1,23 @@
+.git
+.github
+.next
+node_modules
+
+.env
+.env.*
+!.env.example
+
+.DS_Store
+*.log
+*.tar
+*.tar.gz
+*.zip
+
+backups
+# Ignore persisted upload data without excluding src/app/uploads routes.
+uploads/**
+public/uploads/**
+artifacts
+
+# Addons are supplied by the deployment bind mount.
+addons/**

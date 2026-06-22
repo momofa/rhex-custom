@@ -1,0 +1,951 @@
+"use client"
+
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { ArrowRight, Filter, Loader2, ShieldCheck, Trash2, UserCog, UserRoundCheck, UserRoundX, Users, Zap } from "lucide-react"
+import { useMemo, useState, useTransition } from "react"
+
+import {
+  AdminFilterActions,
+  AdminFilterCard,
+  AdminFilterSearchField,
+  AdminFilterSelectField,
+} from "@/components/admin/admin-filter-card"
+import { AdminPaginationBar } from "@/components/admin/admin-pagination-bar"
+import { AdminSummaryStrip } from "@/components/admin/admin-summary-strip"
+import { AdminUserModal } from "@/components/admin/admin-user-modal"
+import { UserAvatar } from "@/components/user/user-avatar"
+import { showConfirm } from "@/components/ui/alert-dialog"
+import { Badge } from "@/components/ui/badge"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { toast } from "@/components/ui/toast"
+import { Tooltip } from "@/components/ui/tooltip"
+import { formatDateTime, formatNumber } from "@/lib/formatters"
+import type { AdminUserListItem, AdminUserListResult } from "@/lib/admin-user-management"
+import { isVipActive } from "@/lib/vip-status"
+import { cn } from "@/lib/utils"
+
+interface AdminUserListProps {
+  data: AdminUserListResult
+  actorUserId: number
+  actorCanDemoteAdmins: boolean
+}
+
+type AdminUserBulkAction = "setRole" | "activate" | "mute" | "ban" | "delete"
+
+interface AdminUserBulkActionResult {
+  affectedCount: number
+  skippedCount: number
+  failedCount: number
+  skippedReasons?: Array<{
+    reason: string
+    count: number
+  }>
+}
+
+const roleOptions = [
+  { value: "ALL", label: "全部角色" },
+  { value: "USER", label: "普通用户" },
+  { value: "MODERATOR", label: "版主" },
+  { value: "ADMIN", label: "管理员" },
+]
+
+const statusOptions = [
+  { value: "ALL", label: "全部状态" },
+  { value: "ACTIVE", label: "正常" },
+  { value: "MUTED", label: "禁言" },
+  { value: "BANNED", label: "拉黑" },
+  { value: "INACTIVE", label: "未激活" },
+]
+
+const pageSizeOptions = [20, 50, 100]
+const vipOptions = [
+  { value: "ALL", label: "全部 VIP" },
+  { value: "vip", label: "仅 VIP" },
+  { value: "non-vip", label: "非 VIP" },
+]
+const activityOptions = [
+  { value: "ALL", label: "全部活跃度" },
+  { value: "online-7d", label: "7 天内登录" },
+  { value: "never-login", label: "从未登录" },
+]
+const sortOptions = [
+  { value: "newest", label: "最新注册" },
+  { value: "oldest", label: "最早注册" },
+  { value: "lastLogin", label: "最近登录" },
+  { value: "mostPosts", label: "发帖最多" },
+  { value: "mostComments", label: "评论最多" },
+  { value: "mostPoints", label: "积分最高" },
+]
+const bulkActionOptions: Array<{ value: AdminUserBulkAction; label: string; danger?: boolean }> = [
+  { value: "setRole", label: "批量改用户组" },
+  { value: "activate", label: "批量恢复" },
+  { value: "mute", label: "批量禁言" },
+  { value: "ban", label: "批量封禁", danger: true },
+  { value: "delete", label: "批量删除", danger: true },
+]
+const bulkRoleOptions = roleOptions.filter((item) => item.value !== "ALL")
+
+export function AdminUserList({ data, actorUserId, actorCanDemoteAdmins }: AdminUserListProps) {
+  const [filters, setFilters] = useState({
+    keyword: data.filters.keyword,
+    role: data.filters.role,
+    status: data.filters.status,
+    vip: data.filters.vip,
+    activity: data.filters.activity,
+    sort: data.filters.sort,
+    pageSize: String(data.pagination.pageSize),
+  })
+  const router = useRouter()
+  const [selectedUserIdsState, setSelectedUserIds] = useState<number[]>([])
+  const [bulkAction, setBulkAction] = useState<AdminUserBulkAction>("setRole")
+  const [bulkRole, setBulkRole] = useState("USER")
+  const [bulkMessage, setBulkMessage] = useState("")
+  const [bulkStatusExpiresAt, setBulkStatusExpiresAt] = useState("")
+  const [isBatchPending, startBatchTransition] = useTransition()
+
+  const visibleUserIds = useMemo(() => new Set(data.users.map((user) => user.id)), [data.users])
+  const selectedUserIds = useMemo(
+    () => selectedUserIdsState.filter((userId) => visibleUserIds.has(userId)),
+    [selectedUserIdsState, visibleUserIds],
+  )
+  const selectedCount = selectedUserIds.length
+  const allCurrentPageSelected = data.users.length > 0 && selectedCount === data.users.length
+  const someCurrentPageSelected = selectedCount > 0 && !allCurrentPageSelected
+  const selectedActionConfig = bulkActionOptions.find((item) => item.value === bulkAction) ?? bulkActionOptions[0]
+  const needsStatusFields = bulkAction === "mute" || bulkAction === "ban"
+  const needsRoleField = bulkAction === "setRole"
+
+  const statCards = useMemo(
+    () => [
+      {
+        label: "用户总数",
+        value: data.summary.total,
+        icon: <Users className="h-4 w-4" />,
+        hint: `当前结果 ${formatNumber(data.pagination.total)} 人`,
+      },
+      {
+        label: "活跃用户",
+        value: data.summary.active,
+        icon: <UserRoundCheck className="h-4 w-4" />,
+        hint: "状态正常且可继续运营",
+        tone: "emerald" as const,
+      },
+      {
+        label: "受限用户",
+        value: data.summary.muted + data.summary.banned,
+        icon: <UserRoundX className="h-4 w-4" />,
+        hint: `禁言 ${formatNumber(data.summary.muted)} / 拉黑 ${formatNumber(data.summary.banned)}`,
+        tone: "rose" as const,
+      },
+      {
+        label: "VIP 用户",
+        value: data.summary.vip,
+        icon: <Zap className="h-4 w-4" />,
+        hint: "可重点做留存与续费",
+        tone: "amber" as const,
+      },
+      {
+        label: "管理成员",
+        value: data.summary.admin + data.summary.moderator,
+        icon: <ShieldCheck className="h-4 w-4" />,
+        hint: `管理员 ${formatNumber(data.summary.admin)} / 版主 ${formatNumber(data.summary.moderator)}`,
+        tone: "sky" as const,
+      },
+    ],
+    [data.pagination.total, data.summary],
+  )
+
+  const activeFilterBadges = useMemo(() => {
+    const badges: string[] = []
+
+    if (filters.keyword.trim()) {
+      badges.push(`关键词: ${filters.keyword.trim()}`)
+    }
+    if (filters.role !== "ALL") {
+      badges.push(`角色: ${roleOptions.find((item) => item.value === filters.role)?.label ?? filters.role}`)
+    }
+    if (filters.status !== "ALL") {
+      badges.push(`状态: ${statusOptions.find((item) => item.value === filters.status)?.label ?? filters.status}`)
+    }
+    if (filters.vip !== "ALL") {
+      badges.push(`VIP: ${vipOptions.find((item) => item.value === filters.vip)?.label ?? filters.vip}`)
+    }
+    if (filters.activity !== "ALL") {
+      badges.push(`活跃度: ${activityOptions.find((item) => item.value === filters.activity)?.label ?? filters.activity}`)
+    }
+    if (filters.sort !== "newest") {
+      badges.push(`排序: ${sortOptions.find((item) => item.value === filters.sort)?.label ?? filters.sort}`)
+    }
+    if (filters.pageSize !== "20") {
+      badges.push(`每页: ${filters.pageSize} 条`)
+    }
+
+    return badges
+  }, [filters])
+
+  const baseQuery = new URLSearchParams({
+    tab: "users",
+    userKeyword: data.filters.keyword,
+    userRole: data.filters.role,
+    userStatus: data.filters.status,
+    userVip: data.filters.vip,
+    userActivity: data.filters.activity,
+    userSort: data.filters.sort,
+    userPageSize: String(data.pagination.pageSize),
+  })
+
+  function buildPageHref(page: number) {
+    const query = new URLSearchParams(baseQuery)
+    query.set("userPage", String(page))
+    return `/admin?${query.toString()}`
+  }
+
+  const paginationJumpFields = [
+    { name: "tab", value: "users" },
+    { name: "userKeyword", value: data.filters.keyword },
+    { name: "userRole", value: data.filters.role },
+    { name: "userStatus", value: data.filters.status },
+    { name: "userVip", value: data.filters.vip },
+    { name: "userActivity", value: data.filters.activity },
+    { name: "userSort", value: data.filters.sort },
+    { name: "userPageSize", value: String(data.pagination.pageSize) },
+  ]
+
+  function toggleSelectUser(userId: number, checked: boolean) {
+    setSelectedUserIds((current) => {
+      if (checked) {
+        return current.includes(userId) ? current : [...current, userId]
+      }
+
+      return current.filter((item) => item !== userId)
+    })
+  }
+
+  function toggleSelectCurrentPage(checked: boolean) {
+    const currentPageIds = data.users.map((user) => user.id)
+    setSelectedUserIds((current) => {
+      if (checked) {
+        return [...new Set([...current, ...currentPageIds])]
+      }
+
+      return current.filter((userId) => !visibleUserIds.has(userId))
+    })
+  }
+
+  async function confirmBulkAction() {
+    if (selectedCount === 0) {
+      toast.warning("请先选择要处理的用户", "批量操作")
+      return
+    }
+
+    if (bulkAction === "setRole" && !bulkRole) {
+      toast.warning("请选择目标用户组", "批量操作")
+      return
+    }
+
+    const actionText = selectedActionConfig.label
+    const detailLines = [
+      `确认对已选中的 ${selectedCount} 个用户执行「${actionText}」吗？`,
+      bulkAction === "setRole" ? `目标用户组：${bulkRoleOptions.find((item) => item.value === bulkRole)?.label ?? bulkRole}` : null,
+      needsStatusFields && bulkMessage.trim() ? `处理原因：${bulkMessage.trim()}` : null,
+      needsStatusFields && bulkStatusExpiresAt ? `自动解除：${bulkStatusExpiresAt.replace("T", " ")}` : null,
+      bulkAction === "delete" ? "删除只会处理普通用户，且已有内容或关键引用的账号会被服务端跳过。" : null,
+    ].filter(Boolean).join("\n")
+
+    const confirmed = await showConfirm({
+      title: actionText,
+      description: detailLines,
+      confirmText: selectedActionConfig.danger ? "确认执行" : "确认",
+      cancelText: "取消",
+      variant: selectedActionConfig.danger ? "danger" : "default",
+    })
+
+    if (!confirmed) {
+      return
+    }
+
+    submitBulkAction()
+  }
+
+  function submitBulkAction() {
+    if (selectedCount === 0) {
+      toast.warning("请先选择要处理的用户", "批量操作")
+      return
+    }
+
+    startBatchTransition(async () => {
+      try {
+        const response = await fetch("/api/admin/users/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: bulkAction,
+            userIds: selectedUserIds,
+            role: bulkRole,
+            message: bulkMessage,
+            statusExpiresAt: bulkStatusExpiresAt,
+            statusExpiresAtTimezoneOffsetMinutes: new Date().getTimezoneOffset(),
+          }),
+        })
+        const result = await response.json().catch(() => null) as { message?: string; data?: AdminUserBulkActionResult } | null
+
+        if (!response.ok) {
+          throw new Error(result?.message ?? "批量用户操作失败")
+        }
+
+        const skippedText = result?.data?.skippedReasons?.length
+          ? `\n${result.data.skippedReasons.map((item) => `${item.reason} ${item.count} 人`).join("\n")}`
+          : ""
+        const message = `${result?.message ?? "批量操作已完成"}${skippedText}`
+
+        if ((result?.data?.skippedCount ?? 0) > 0 || (result?.data?.failedCount ?? 0) > 0) {
+          toast.warning(message, "批量操作完成")
+        } else {
+          toast.success(message, "操作成功")
+        }
+
+        setSelectedUserIds([])
+        router.refresh()
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "批量用户操作失败", "操作失败")
+      }
+    })
+  }
+
+  return (
+    <div className="space-y-4">
+      <AdminFilterCard
+        title="用户筛选"
+        description="按角色、状态、VIP 和活跃度快速定位待运营或待处置用户。"
+        badge={<Badge variant="secondary" className="rounded-full">已命中 {formatNumber(data.pagination.total)} 人</Badge>}
+        activeBadges={activeFilterBadges}
+      >
+        <form action="/admin" className="grid gap-2 xl:grid-cols-[minmax(180px,1.6fr)_repeat(6,minmax(84px,1fr))_auto] xl:items-end">
+          <input type="hidden" name="tab" value="users" />
+          <input type="hidden" name="userPage" value="1" />
+          <input type="hidden" name="userRole" value={filters.role} />
+          <input type="hidden" name="userStatus" value={filters.status} />
+          <input type="hidden" name="userVip" value={filters.vip} />
+          <input type="hidden" name="userActivity" value={filters.activity} />
+          <input type="hidden" name="userSort" value={filters.sort} />
+          <input type="hidden" name="userPageSize" value={filters.pageSize} />
+
+          <AdminFilterSearchField
+            label="搜索用户"
+            name="userKeyword"
+            value={filters.keyword}
+            onChange={(value) => setFilters((current) => ({ ...current, keyword: value }))}
+            placeholder="用户名 / 昵称 / 邮箱 / 手机 / 简介"
+          />
+
+          <AdminFilterSelectField
+            label="角色"
+            value={filters.role}
+            onValueChange={(value) => setFilters((current) => ({ ...current, role: value }))}
+            options={roleOptions}
+          />
+          <AdminFilterSelectField
+            label="状态"
+            value={filters.status}
+            onValueChange={(value) => setFilters((current) => ({ ...current, status: value }))}
+            options={statusOptions}
+          />
+          <AdminFilterSelectField
+            label="VIP"
+            value={filters.vip}
+            onValueChange={(value) => setFilters((current) => ({ ...current, vip: value }))}
+            options={vipOptions}
+          />
+          <AdminFilterSelectField
+            label="活跃度"
+            value={filters.activity}
+            onValueChange={(value) => setFilters((current) => ({ ...current, activity: value }))}
+            options={activityOptions}
+          />
+          <AdminFilterSelectField
+            label="排序"
+            value={filters.sort}
+            onValueChange={(value) => setFilters((current) => ({ ...current, sort: value }))}
+            options={sortOptions}
+          />
+          <AdminFilterSelectField
+            label="每页"
+            value={filters.pageSize}
+            onValueChange={(value) => setFilters((current) => ({ ...current, pageSize: value }))}
+            options={pageSizeOptions.map((item) => ({ value: String(item), label: `${item} 条` }))}
+          />
+
+          <AdminFilterActions
+            submitLabel="筛选用户"
+            resetHref="/admin?tab=users"
+            submitIcon={<Filter className="h-3.5 w-3.5" />}
+          />
+        </form>
+      </AdminFilterCard>
+
+      <AdminSummaryStrip items={statCards} />
+
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>用户列表</CardTitle>
+          <CardDescription>在同一行里查看身份、状态、活跃度和运营指标，并直接打开详情面板处理。</CardDescription>
+          <CardAction>
+            <OverviewActionLink href="/admin?tab=users&userVip=vip" label="查看 VIP 用户" />
+          </CardAction>
+        </CardHeader>
+        {data.users.length > 0 ? (
+          <div className="flex flex-col gap-3 border-b border-border px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                <label className="flex items-center gap-2">
+                  <Checkbox
+                    checked={allCurrentPageSelected}
+                    indeterminate={someCurrentPageSelected}
+                    onCheckedChange={(checked) => toggleSelectCurrentPage(checked === true)}
+                    aria-label="全选本页用户"
+                  />
+                  <span>全选本页</span>
+                </label>
+                <span>已选 {selectedCount} 人</span>
+                {selectedCount > 0 ? (
+                  <Button type="button" variant="ghost" size="sm" className="min-h-9 rounded-full px-3 text-xs" disabled={isBatchPending} onClick={() => setSelectedUserIds([])}>
+                    清空选择
+                  </Button>
+                ) : null}
+              </div>
+              <Button type="button" size="sm" className="min-h-9 w-full rounded-full px-3 text-xs sm:w-auto" disabled={selectedCount === 0 || isBatchPending} onClick={() => void confirmBulkAction()}>
+                {isBatchPending ? <Loader2 data-icon="inline-start" className="animate-spin" /> : selectedActionConfig.value === "delete" ? <Trash2 data-icon="inline-start" /> : <UserCog data-icon="inline-start" />}
+                执行批量操作
+              </Button>
+            </div>
+            <div className="grid gap-2 lg:grid-cols-[150px_140px_minmax(180px,1fr)_180px] lg:items-end">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[10px] font-medium text-muted-foreground">批量操作</span>
+                <Select value={bulkAction} onValueChange={(value) => setBulkAction(value as AdminUserBulkAction)} disabled={isBatchPending}>
+                  <SelectTrigger className="h-9 rounded-full bg-background px-3 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {bulkActionOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+              {needsRoleField ? (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[10px] font-medium text-muted-foreground">目标用户组</span>
+                  <Select value={bulkRole} onValueChange={setBulkRole} disabled={isBatchPending}>
+                    <SelectTrigger className="h-9 rounded-full bg-background px-3 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {bulkRoleOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              {needsStatusFields ? (
+                <>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-medium text-muted-foreground">处理原因</span>
+                    <Textarea
+                      value={bulkMessage}
+                      onChange={(event) => setBulkMessage(event.target.value)}
+                      placeholder="可选，留空则使用默认原因"
+                      disabled={isBatchPending}
+                      className="min-h-9 rounded-xl bg-background text-xs"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-[10px] font-medium text-muted-foreground">自动解除时间</span>
+                    <Input
+                      type="datetime-local"
+                      value={bulkStatusExpiresAt}
+                      onChange={(event) => setBulkStatusExpiresAt(event.target.value)}
+                      disabled={isBatchPending}
+                      className="h-9 rounded-full bg-background px-3 text-xs"
+                    />
+                  </label>
+                </>
+              ) : (
+                <div className={cn("text-xs leading-6 text-muted-foreground", needsRoleField ? "lg:col-span-2" : "lg:col-span-3")}>
+                  {bulkAction === "activate"
+                    ? "恢复会清除禁言/封禁状态和自动解除时间。"
+                    : bulkAction === "delete"
+                      ? "删除只处理无关键内容引用的普通用户，管理员、版主和已有内容的用户会被跳过。"
+                      : "选择用户组后执行，涉及管理员调整时会保留至少一个管理员账号。"}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : null}
+        {data.users.length > 0 ? (
+          <AdminPaginationBar
+            pagination={data.pagination}
+            buildPageHref={buildPageHref}
+            itemLabel="条用户"
+            className="border-b border-border px-4 py-3"
+            jump={{
+              action: "/admin",
+              pageParamName: "userPage",
+              hiddenFields: paginationJumpFields,
+              ariaLabel: "跳转到用户列表页码",
+            }}
+          />
+        ) : null}
+        <CardContent className="px-0 py-0">
+          {data.users.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
+              <p className="text-sm font-medium">当前筛选条件下没有用户</p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                试试放宽角色、状态或关键词，或者直接重置筛选重新查看。
+              </p>
+              <OverviewActionLink href="/admin?tab=users" label="重置筛选" />
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-col gap-3 p-3 md:hidden">
+                {data.users.map((user) => (
+                  <UserMobileCard
+                    key={user.id}
+                    user={user}
+                    selected={selectedUserIds.includes(user.id)}
+                    onSelect={(checked) => toggleSelectUser(user.id, checked)}
+                    moderatorScopeOptions={data.moderatorScopeOptions}
+                    actorUserId={actorUserId}
+                    actorCanDemoteAdmins={actorCanDemoteAdmins}
+                  />
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
+                <Table className="min-w-[1320px]">
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="w-[52px]">
+                        <Checkbox
+                          checked={allCurrentPageSelected}
+                          indeterminate={someCurrentPageSelected}
+                          onCheckedChange={(checked) => toggleSelectCurrentPage(checked === true)}
+                          aria-label="全选本页用户"
+                        />
+                      </TableHead>
+                      <TableHead>用户</TableHead>
+                      <TableHead className="w-[180px]">联系</TableHead>
+                      <TableHead className="w-[170px]">身份</TableHead>
+                      <TableHead className="w-[180px]">状态 / VIP</TableHead>
+                      <TableHead className="w-[170px]">时间</TableHead>
+                      <TableHead className="w-[110px]">产出</TableHead>
+                      <TableHead className="w-[110px]">互动</TableHead>
+                      <TableHead className="w-[110px]">邀请 / 签到</TableHead>
+                      <TableHead className="w-[120px] text-right">操作</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.users.map((user) => (
+                      <TableRow key={user.id} data-state={selectedUserIds.includes(user.id) ? "selected" : undefined}>
+                        <TableCell className="align-top">
+                          <Checkbox
+                            checked={selectedUserIds.includes(user.id)}
+                            onCheckedChange={(checked) => toggleSelectUser(user.id, checked === true)}
+                            aria-label={`选择用户 ${user.username}`}
+                          />
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <UserProfileCell user={user} />
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <UserContactCell user={user} />
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <UserIdentityCell user={user} />
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <UserStatusCell user={user} />
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <UserTimeCell user={user} />
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <UserContentMetricsCell user={user} />
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <UserSocialMetricsCell user={user} />
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <UserGrowthMetricsCell user={user} />
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <div className="flex justify-end">
+                            <AdminUserModal
+                              user={user}
+                              moderatorScopeOptions={data.moderatorScopeOptions}
+                              actorUserId={actorUserId}
+                              actorCanDemoteAdmins={actorCanDemoteAdmins}
+                              triggerClassName="min-h-9 px-3"
+                            />
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          )}
+        </CardContent>
+        <CardFooter>
+          <AdminPaginationBar
+            pagination={data.pagination}
+            buildPageHref={buildPageHref}
+            itemLabel="条用户"
+            className="w-full"
+            jump={{
+              action: "/admin",
+              pageParamName: "userPage",
+              hiddenFields: paginationJumpFields,
+              ariaLabel: "跳转到用户列表页码",
+            }}
+          />
+        </CardFooter>
+      </Card>
+    </div>
+  )
+}
+
+function UserProfileCell({ user }: { user: AdminUserListItem }) {
+  return (
+    <div className="flex items-start gap-3">
+      <div className="mt-0.5">
+        <UserAvatar name={user.displayName || user.username} avatarPath={user.avatarPath} size="xs" />
+      </div>
+      <div className="min-w-0">
+        <p className="line-clamp-1 text-sm font-medium">{user.displayName}</p>
+        <p className="mt-1 text-xs text-muted-foreground">@{user.username}</p>
+        <p className="mt-1 text-xs text-muted-foreground">UID {user.id}</p>
+        {user.bio ? (
+          <Tooltip content={user.bio} className="w-full" disabled={user.bio.length < 28}>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+              {user.bio}
+            </p>
+          </Tooltip>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function UserMobileCard({
+  user,
+  selected,
+  onSelect,
+  moderatorScopeOptions,
+  actorUserId,
+  actorCanDemoteAdmins,
+}: {
+  user: AdminUserListItem
+  selected: boolean
+  onSelect: (checked: boolean) => void
+  moderatorScopeOptions: AdminUserListResult["moderatorScopeOptions"]
+  actorUserId: number
+  actorCanDemoteAdmins: boolean
+}) {
+  const vipActive = isVipActive({ vipLevel: user.vipLevel, vipExpiresAt: user.vipExpiresAt })
+  const moderatorScopeSummary =
+    user.role === "MODERATOR"
+      ? `${user.moderatedZoneScopes.length} 分区 / ${user.moderatedBoardScopes.length} 节点`
+      : null
+
+  return (
+    <article
+      data-state={selected ? "selected" : undefined}
+      className="rounded-[18px] border border-border/80 bg-card p-3 shadow-xs transition-colors active:bg-muted/50 data-[state=selected]:border-primary/45 data-[state=selected]:bg-primary/5"
+    >
+      <div className="flex items-start gap-3">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={(checked) => onSelect(checked === true)}
+          aria-label={`选择用户 ${user.username}`}
+          className="mt-1 shrink-0"
+        />
+        <UserAvatar name={user.displayName || user.username} avatarPath={user.avatarPath} size="sm" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="line-clamp-1 text-[15px] font-semibold leading-6 text-foreground">
+                {user.displayName}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">@{user.username} · UID {user.id}</p>
+            </div>
+            <AdminUserModal
+              user={user}
+              moderatorScopeOptions={moderatorScopeOptions}
+              actorUserId={actorUserId}
+              actorCanDemoteAdmins={actorCanDemoteAdmins}
+              triggerClassName="min-h-9 px-3"
+            />
+          </div>
+        </div>
+      </div>
+
+      {user.bio ? (
+        <p className="mt-3 line-clamp-2 text-sm leading-6 text-muted-foreground [overflow-wrap:anywhere]">
+          {user.bio}
+        </p>
+      ) : null}
+
+      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <Badge className={getStatusBadgeClassName(user.status)}>
+          {getStatusLabel(user.status)}
+        </Badge>
+        <Badge className={getRoleBadgeClassName(user.role)}>
+          {getRoleLabel(user.role)}
+        </Badge>
+        <Badge className={vipActive ? getVipBadgeClassName() : "border-border bg-background text-muted-foreground"}>
+          {vipActive ? `VIP${user.vipLevel}` : "非 VIP"}
+        </Badge>
+        <Badge variant="outline">Lv.{user.level}</Badge>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+        <div className="rounded-[14px] bg-muted/45 px-3 py-2">
+          <p className="font-medium text-foreground">注册 / 登录</p>
+          <p className="mt-1">注册 {formatDateTime(user.createdAt)}</p>
+          <p className="mt-1">{user.lastLoginAt ? `登录 ${formatDateTime(user.lastLoginAt)}` : "从未登录"}</p>
+        </div>
+        <div className="rounded-[14px] bg-muted/45 px-3 py-2">
+          <p className="font-medium text-foreground">联系 / 来源</p>
+          <p className="mt-1 line-clamp-1">{user.email ?? user.phone ?? "未绑定联系方式"}</p>
+          <p className="mt-1 line-clamp-1">{moderatorScopeSummary ?? `邀请人 ${user.inviterName ?? "-"}`}</p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+        <span className="rounded-full bg-muted/60 px-2.5 py-1">帖子 {formatNumber(user.postCount)}</span>
+        <span className="rounded-full bg-muted/60 px-2.5 py-1">评论 {formatNumber(user.commentCount)}</span>
+        <span className="rounded-full bg-muted/60 px-2.5 py-1">获赞 {formatNumber(user.likeReceivedCount)}</span>
+        <span className="rounded-full bg-muted/60 px-2.5 py-1">积分 {formatNumber(user.points)}</span>
+      </div>
+
+      {user.status === "MUTED" || user.status === "BANNED" ? (
+        <p className="mt-3 rounded-[14px] border border-dashed border-border/80 bg-background/70 px-3 py-2 text-xs leading-5 text-muted-foreground">
+          {user.statusExpiresAt ? `自动解除：${formatDateTime(user.statusExpiresAt)}` : "永久限制"}
+          {user.statusReason ? ` · ${user.statusReason}` : ""}
+        </p>
+      ) : null}
+    </article>
+  )
+}
+
+function UserContactCell({ user }: { user: AdminUserListItem }) {
+  return (
+    <div className="space-y-1 text-xs text-muted-foreground">
+      <p className="line-clamp-1">{user.email ?? "未绑定邮箱"}</p>
+      <p className="line-clamp-1">{user.phone ?? "未绑定手机"}</p>
+      <p className="line-clamp-1">{user.lastLoginIp ?? "无登录 IP"}</p>
+    </div>
+  )
+}
+
+function UserIdentityCell({ user }: { user: AdminUserListItem }) {
+  const moderatorScopeSummary =
+    user.role === "MODERATOR"
+      ? `${user.moderatedZoneScopes.length} 个分区 / ${user.moderatedBoardScopes.length} 个节点`
+      : null
+
+  return (
+    <div className="space-y-2 text-xs">
+      <div>
+        <p className="font-medium text-foreground">{getRoleLabel(user.role)}</p>
+        <p className="mt-0.5 text-muted-foreground">状态 {getStatusLabel(user.status)}</p>
+      </div>
+      <p className="text-muted-foreground">
+        {moderatorScopeSummary ?? `邀请人 ${user.inviterName ?? "-"}`}
+      </p>
+      <p className="text-muted-foreground">
+        收藏 {formatNumber(user.favoriteCount)} · 邀请 {formatNumber(user.inviteCount)}
+      </p>
+    </div>
+  )
+}
+
+function UserStatusCell({ user }: { user: AdminUserListItem }) {
+  const vipActive = isVipActive({ vipLevel: user.vipLevel, vipExpiresAt: user.vipExpiresAt })
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        <Badge className={getStatusBadgeClassName(user.status)}>
+          {getStatusLabel(user.status)}
+        </Badge>
+        <Badge className={getRoleBadgeClassName(user.role)}>
+          {getRoleLabel(user.role)}
+        </Badge>
+        <Badge className={vipActive ? getVipBadgeClassName() : "border-border bg-background text-muted-foreground"}>
+          {vipActive ? `VIP${user.vipLevel}` : "非 VIP"}
+        </Badge>
+      </div>
+      <div className="text-xs text-muted-foreground">
+        <p>等级 Lv.{user.level}</p>
+        <p className="mt-1">
+          {user.vipExpiresAt ? `到期 ${formatDateTime(user.vipExpiresAt)}` : "长期 / 无"}
+        </p>
+        {user.status === "MUTED" || user.status === "BANNED" ? (
+          <p className="mt-1">
+            {user.statusExpiresAt ? `自动解除 ${formatDateTime(user.statusExpiresAt)}` : "永久限制"}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function UserTimeCell({ user }: { user: AdminUserListItem }) {
+  return (
+    <div className="space-y-1 text-xs text-muted-foreground">
+      <p>注册 {formatDateTime(user.createdAt)}</p>
+      <p>{user.lastLoginAt ? `登录 ${formatDateTime(user.lastLoginAt)}` : "从未登录"}</p>
+      <p>积分 {formatNumber(user.points)}</p>
+    </div>
+  )
+}
+
+function UserContentMetricsCell({ user }: { user: AdminUserListItem }) {
+  return (
+    <div className="space-y-1 text-xs text-muted-foreground">
+      <p>帖子 {formatNumber(user.postCount)}</p>
+      <p>评论 {formatNumber(user.commentCount)}</p>
+    </div>
+  )
+}
+
+function UserSocialMetricsCell({ user }: { user: AdminUserListItem }) {
+  return (
+    <div className="space-y-1 text-xs text-muted-foreground">
+      <p>获赞 {formatNumber(user.likeReceivedCount)}</p>
+      <p>收藏 {formatNumber(user.favoriteCount)}</p>
+    </div>
+  )
+}
+
+function UserGrowthMetricsCell({ user }: { user: AdminUserListItem }) {
+  return (
+    <div className="space-y-1 text-xs text-muted-foreground">
+      <p>邀请 {formatNumber(user.inviteCount)}</p>
+      <p>签到 {formatNumber(user.checkInDays)}</p>
+    </div>
+  )
+}
+
+function OverviewActionLink({
+  href,
+  label,
+}: {
+  href: string
+  label: string
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        buttonVariants({ variant: "outline", size: "sm" }),
+        "rounded-full shadow-xs"
+      )}
+    >
+      {label}
+      <ArrowRight className="h-3.5 w-3.5" />
+    </Link>
+  )
+}
+
+function getRoleLabel(role: string) {
+  if (role === "ADMIN") {
+    return "管理员"
+  }
+  if (role === "MODERATOR") {
+    return "版主"
+  }
+  return "普通用户"
+}
+
+function getStatusLabel(status: string) {
+  if (status === "ACTIVE") {
+    return "正常"
+  }
+  if (status === "MUTED") {
+    return "禁言"
+  }
+  if (status === "BANNED") {
+    return "拉黑"
+  }
+  if (status === "INACTIVE") {
+    return "未激活"
+  }
+  return status
+}
+
+function getRoleBadgeClassName(role: string) {
+  if (role === "ADMIN") {
+    return "border-transparent bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-200"
+  }
+  if (role === "MODERATOR") {
+    return "border-transparent bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-200"
+  }
+  return "border-border bg-background text-muted-foreground"
+}
+
+function getStatusBadgeClassName(status: string) {
+  if (status === "MUTED") {
+    return "border-transparent bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-200"
+  }
+  if (status === "BANNED") {
+    return "border-transparent bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-200"
+  }
+  if (status === "INACTIVE") {
+    return "border-transparent bg-slate-100 text-slate-700 dark:bg-slate-500/15 dark:text-slate-200"
+  }
+  return "border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200"
+}
+
+function getVipBadgeClassName() {
+  return "border-transparent bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-200"
+}

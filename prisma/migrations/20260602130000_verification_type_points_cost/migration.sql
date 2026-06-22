@@ -1,0 +1,1 @@
+ALTER TABLE "VerificationType" ADD COLUMN "pointsCost" INTEGER NOT NULL DEFAULT 0;

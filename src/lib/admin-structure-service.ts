@@ -1,0 +1,472 @@
+import { Prisma } from "@/db/types"
+import {
+  BoardStatus,
+  countBoardsByZone,
+  countPostsByBoard,
+  createBoard,
+  createZone,
+  deleteBoard,
+  deleteZone,
+  updateBoard,
+  updateZone,
+} from "@/db/admin-structure-queries"
+
+import { apiError, readOptionalNumberField, readOptionalStringField, type JsonObject } from "@/lib/api-route"
+import { isFounderAdmin } from "@/lib/admin-founder"
+import { canAdminWithPermissionOverrides } from "@/lib/admin-permission-overrides"
+import { normalizeBoardSidebarLinks } from "@/lib/board-sidebar-config"
+import type { AdminActor } from "@/lib/moderator-permissions"
+import { ensureCanEditBoard, ensureCanEditZone, isSiteAdmin } from "@/lib/moderator-permissions"
+
+import { normalizeNullablePostListLoadMode } from "@/lib/post-list-load-mode"
+import { DEFAULT_ALLOWED_POST_TYPES_VALUE, serializePostTypes } from "@/lib/post-types"
+import { normalizeNullablePostListDisplayMode } from "@/lib/post-list-display"
+
+
+function parseNullableNumber(value: unknown) {
+  if (value === undefined || value === null || value === "") {
+    return undefined
+  }
+
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : undefined
+}
+
+function parseBoolean(value: unknown) {
+  return value === true || value === "true"
+}
+
+function parseNullableBoolean(value: unknown): boolean | null | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+
+  if (value === null || value === "") {
+    return null
+  }
+
+  if (value === true || value === "true") {
+    return true
+  }
+
+  if (value === false || value === "false") {
+    return false
+  }
+
+  return undefined
+}
+
+function parseStringList(value: unknown) {
+  if (!Array.isArray(value)) {
+    return undefined
+  }
+
+  return Array.from(new Set(
+    value
+      .map((item) => typeof item === "string" ? item.trim() : "")
+      .filter(Boolean),
+  ))
+}
+
+interface MutableRecord {
+  [key: string]: unknown
+}
+
+function isRecord(value: unknown): value is MutableRecord {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function buildBoardConfigJson(body: Record<string, unknown>, currentConfig?: unknown): Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | undefined {
+  const hasSidebarFields = [
+    "sidebarLinks",
+    "rulesMarkdown",
+    "moderatorsCanWithdrawTreasury",
+  ].some((field) => field in body)
+
+  if (!hasSidebarFields) {
+    return undefined
+  }
+
+  const hasSidebarLinks = "sidebarLinks" in body
+  const hasRulesMarkdown = "rulesMarkdown" in body
+  const hasTreasuryFields = "moderatorsCanWithdrawTreasury" in body
+  const sidebarLinks = hasSidebarLinks ? normalizeBoardSidebarLinks(body.sidebarLinks) : null
+  const rulesMarkdown = hasRulesMarkdown ? readOptionalStringField(body, "rulesMarkdown") : null
+  const nextConfig = isRecord(currentConfig) ? { ...currentConfig } : {}
+  const nextSidebar = isRecord(nextConfig.sidebar) ? { ...nextConfig.sidebar } : {}
+  const nextBoardTreasury = isRecord(nextConfig.boardTreasury) ? { ...nextConfig.boardTreasury } : {}
+
+  if (hasSidebarLinks) {
+    if (sidebarLinks && sidebarLinks.length > 0) {
+      nextSidebar.links = sidebarLinks.map((item) => ({
+        title: item.title,
+        url: item.url,
+        ...(item.icon ? { icon: item.icon } : {}),
+        ...(item.titleColor ? { titleColor: item.titleColor } : {}),
+      }))
+    } else {
+      delete nextSidebar.links
+      delete nextSidebar.link
+    }
+  }
+
+  if (hasRulesMarkdown) {
+    if (rulesMarkdown) {
+      nextSidebar.rulesMarkdown = rulesMarkdown
+    } else {
+      delete nextSidebar.rulesMarkdown
+    }
+  }
+
+  if (hasTreasuryFields) {
+    nextBoardTreasury.moderatorsCanWithdrawTreasury = parseBoolean(body.moderatorsCanWithdrawTreasury)
+  }
+
+  if (Object.keys(nextSidebar).length > 0) {
+    nextConfig.sidebar = nextSidebar
+  } else {
+    delete nextConfig.sidebar
+  }
+
+  if (Object.keys(nextBoardTreasury).length > 0) {
+    nextConfig.boardTreasury = nextBoardTreasury
+  } else {
+    delete nextConfig.boardTreasury
+  }
+
+  return Object.keys(nextConfig).length > 0 ? nextConfig as Prisma.InputJsonValue : Prisma.DbNull
+}
+
+function sanitizeBoardConfigPayloadForActor(
+  actor: AdminActor,
+  body: Record<string, unknown>,
+  currentConfig?: unknown,
+) {
+  if (isSiteAdmin(actor)) {
+    return buildBoardConfigJson(body, currentConfig)
+  }
+
+  const safeBody = { ...body }
+  delete safeBody.moderatorsCanWithdrawTreasury
+  return buildBoardConfigJson(safeBody, currentConfig)
+}
+
+function buildBoardAdvancedPayload(body: Record<string, unknown>, currentConfig?: unknown) {
+  return {
+    postPointDelta: parseNullableNumber(body.postPointDelta),
+    replyPointDelta: parseNullableNumber(body.replyPointDelta),
+    postIntervalSeconds: parseNullableNumber(body.postIntervalSeconds),
+    replyIntervalSeconds: parseNullableNumber(body.replyIntervalSeconds),
+    allowedPostTypes: Array.isArray(body.allowedPostTypes) && body.allowedPostTypes.length > 0 ? (body.allowedPostTypes as string[]).join(",") : undefined,
+    allowUserPost: parseNullableBoolean(body.allowUserPost),
+    allowUserReply: parseNullableBoolean(body.allowUserReply),
+    allowPostAuthorOfflineComment: parseNullableBoolean(body.allowPostAuthorOfflineComment),
+    allowUserOfflineOwnComment: parseNullableBoolean(body.allowUserOfflineOwnComment),
+    minViewPoints: parseNullableNumber(body.minViewPoints),
+    minViewLevel: parseNullableNumber(body.minViewLevel),
+    minPostPoints: parseNullableNumber(body.minPostPoints),
+    minPostLevel: parseNullableNumber(body.minPostLevel),
+    minReplyPoints: parseNullableNumber(body.minReplyPoints),
+    minReplyLevel: parseNullableNumber(body.minReplyLevel),
+    minViewVipLevel: parseNullableNumber(body.minViewVipLevel),
+    minPostVipLevel: parseNullableNumber(body.minPostVipLevel),
+    minReplyVipLevel: parseNullableNumber(body.minReplyVipLevel),
+    postIdentityGateInherit: parseNullableBoolean(body.postIdentityGateInherit) ?? undefined,
+    replyIdentityGateInherit: parseNullableBoolean(body.replyIdentityGateInherit) ?? undefined,
+    postRequiredVerificationTypeIds: parseStringList(body.postRequiredVerificationTypeIds),
+    postRequiredBadgeIds: parseStringList(body.postRequiredBadgeIds),
+    replyRequiredVerificationTypeIds: parseStringList(body.replyRequiredVerificationTypeIds),
+    replyRequiredBadgeIds: parseStringList(body.replyRequiredBadgeIds),
+    requirePostReview: body.requirePostReview === undefined ? undefined : parseBoolean(body.requirePostReview),
+    requireCommentReview: body.requireCommentReview === undefined ? undefined : parseBoolean(body.requireCommentReview),
+    showInHomeFeed: parseNullableBoolean(body.showInHomeFeed),
+    postListDisplayMode: normalizeNullablePostListDisplayMode(body.postListDisplayMode) ?? undefined,
+    postListLoadMode: normalizeNullablePostListLoadMode(body.postListLoadMode) ?? undefined,
+    configJson: buildBoardConfigJson(body, currentConfig),
+  }
+}
+
+function ensureModeratorBoardAdvancedLimits(payload: ReturnType<typeof buildBoardAdvancedPayload>) {
+  const limitedFields = [
+    { label: "发帖积分", value: payload.postPointDelta },
+    { label: "回复积分", value: payload.replyPointDelta },
+    { label: "发帖间隔", value: payload.postIntervalSeconds },
+    { label: "回复间隔", value: payload.replyIntervalSeconds },
+  ]
+
+  const invalidField = limitedFields.find((field) => typeof field.value === "number" && field.value > 0)
+  if (invalidField) {
+    apiError(400, `版主编辑节点时，${invalidField.label}只能填写留空、0 或负数`)
+  }
+}
+
+function buildZonePayload(
+  body: Record<string, unknown>,
+  sortOrder: number,
+  name: string,
+  slug: string,
+  description: string,
+  icon: string,
+  currentShowInHomeFeed?: boolean,
+  currentAllowUserPost?: boolean,
+  currentAllowUserReply?: boolean,
+  currentAllowPostAuthorOfflineComment?: boolean,
+  currentAllowUserOfflineOwnComment?: boolean,
+) {
+  const showInHomeFeed = parseNullableBoolean(body.showInHomeFeed)
+
+  return {
+    name,
+    slug,
+    description: description || undefined,
+    icon,
+    sortOrder,
+    hiddenFromSidebar: parseBoolean(body.hiddenFromSidebar),
+    showInHomeFeed: typeof showInHomeFeed === "boolean" ? showInHomeFeed : currentShowInHomeFeed ?? true,
+    allowUserPost: parseNullableBoolean(body.allowUserPost) ?? currentAllowUserPost ?? true,
+    allowUserReply: parseNullableBoolean(body.allowUserReply) ?? currentAllowUserReply ?? true,
+    allowPostAuthorOfflineComment: parseNullableBoolean(body.allowPostAuthorOfflineComment) ?? currentAllowPostAuthorOfflineComment ?? false,
+    allowUserOfflineOwnComment: parseNullableBoolean(body.allowUserOfflineOwnComment) ?? currentAllowUserOfflineOwnComment ?? false,
+    postPointDelta: parseNullableNumber(body.postPointDelta) ?? 0,
+    replyPointDelta: parseNullableNumber(body.replyPointDelta) ?? 0,
+    postIntervalSeconds: parseNullableNumber(body.postIntervalSeconds) ?? 120,
+    replyIntervalSeconds: parseNullableNumber(body.replyIntervalSeconds) ?? 3,
+    allowedPostTypes: Array.isArray(body.allowedPostTypes) && body.allowedPostTypes.length > 0 ? serializePostTypes(body.allowedPostTypes as never) : DEFAULT_ALLOWED_POST_TYPES_VALUE,
+    minViewPoints: parseNullableNumber(body.minViewPoints) ?? 0,
+    minViewLevel: parseNullableNumber(body.minViewLevel) ?? 0,
+    minPostPoints: parseNullableNumber(body.minPostPoints) ?? 0,
+    minPostLevel: parseNullableNumber(body.minPostLevel) ?? 0,
+    minReplyPoints: parseNullableNumber(body.minReplyPoints) ?? 0,
+    minReplyLevel: parseNullableNumber(body.minReplyLevel) ?? 0,
+    requirePostReview: parseBoolean(body.requirePostReview),
+    requireCommentReview: parseBoolean(body.requireCommentReview),
+    minViewVipLevel: parseNullableNumber(body.minViewVipLevel) ?? 0,
+    minPostVipLevel: parseNullableNumber(body.minPostVipLevel) ?? 0,
+    minReplyVipLevel: parseNullableNumber(body.minReplyVipLevel) ?? 0,
+    postRequiredVerificationTypeIds: parseStringList(body.postRequiredVerificationTypeIds) ?? [],
+    postRequiredBadgeIds: parseStringList(body.postRequiredBadgeIds) ?? [],
+    replyRequiredVerificationTypeIds: parseStringList(body.replyRequiredVerificationTypeIds) ?? [],
+    replyRequiredBadgeIds: parseStringList(body.replyRequiredBadgeIds) ?? [],
+    postListDisplayMode: normalizeNullablePostListDisplayMode(body.postListDisplayMode) ?? null,
+    postListLoadMode: normalizeNullablePostListLoadMode(body.postListLoadMode) ?? null,
+  }
+}
+
+function getUniqueConstraintMessage(type: string, error: Prisma.PrismaClientKnownRequestError) {
+  if (error.code !== "P2002") {
+    return null
+  }
+
+  const target = Array.isArray(error.meta?.target) ? error.meta.target.map((item) => String(item)) : []
+  const entityLabel = type === "board" ? "节点" : "分区"
+
+  if (target.includes("slug")) {
+    return `${entityLabel} slug 已存在，请换一个更唯一的标识`
+  }
+
+  if (target.includes("name")) {
+    return `${entityLabel}名称已存在，请更换后再试`
+  }
+
+  return `${entityLabel}标识已存在，请检查名称或 slug 是否重复`
+}
+
+function handleStructureMutationError(type: string, error: unknown) {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    const message = getUniqueConstraintMessage(type, error)
+    if (message) {
+      apiError(409, message)
+    }
+  }
+
+  throw error
+}
+
+export async function createStructureItem(params: {
+  body: JsonObject
+  adminId: number
+  actor: AdminActor
+}) {
+  if (!isSiteAdmin(params.actor)) {
+    apiError(403, "仅管理员可创建分区或节点")
+  }
+  if (!await canAdminWithPermissionOverrides(params.actor, "admin.structure.create")) {
+    apiError(403, "无权创建分区或节点")
+  }
+
+  const rawBody = params.body as Record<string, unknown>
+  const type = readOptionalStringField(rawBody, "type")
+  const name = readOptionalStringField(rawBody, "name")
+  const slug = readOptionalStringField(rawBody, "slug")
+  const description = readOptionalStringField(rawBody, "description")
+  const sortOrder = readOptionalNumberField(rawBody, "sortOrder") ?? 0
+
+  if (!type || !name || !slug) {
+    apiError(400, "名称和标识不能为空")
+  }
+
+  if (type === "zone") {
+    try {
+      const icon = readOptionalStringField(rawBody, "icon") || "📚"
+      const zone = await createZone(buildZonePayload(rawBody, sortOrder, name, slug, description, icon))
+
+      return { message: "分区已创建", data: { id: zone.id }, action: "zone.create", targetType: "ZONE", targetId: zone.id, detail: `创建分区 ${name}` }
+    } catch (error) {
+      handleStructureMutationError(type, error)
+    }
+  }
+
+  if (type === "board") {
+    const zoneId = readOptionalStringField(rawBody, "zoneId")
+    if (!zoneId) {
+      apiError(400, "请选择所属分区")
+    }
+
+    try {
+      const icon = readOptionalStringField(rawBody, "icon") || "💬"
+      const board = await createBoard({
+        zoneId,
+        name,
+        slug,
+        description: description || undefined,
+        iconPath: icon,
+        sortOrder,
+        status: BoardStatus.ACTIVE,
+        ...buildBoardAdvancedPayload(rawBody),
+      })
+
+      return { message: "节点已创建", data: { id: board.id }, action: "board.create", targetType: "BOARD", targetId: board.id, detail: `创建节点 ${name}` }
+    } catch (error) {
+      handleStructureMutationError(type, error)
+    }
+  }
+
+  apiError(400, "不支持的结构类型")
+}
+
+export async function updateStructureItem(params: {
+  body: JsonObject
+  adminId: number
+  actor: AdminActor
+}) {
+  if (isSiteAdmin(params.actor) && !await canAdminWithPermissionOverrides(params.actor, "admin.structure.edit")) {
+    apiError(403, "无权编辑分区或节点")
+  }
+
+  const rawBody = params.body as Record<string, unknown>
+  const type = readOptionalStringField(rawBody, "type")
+  const id = readOptionalStringField(rawBody, "id")
+  const name = readOptionalStringField(rawBody, "name")
+  const slug = readOptionalStringField(rawBody, "slug")
+  const description = readOptionalStringField(rawBody, "description")
+  const sortOrder = readOptionalNumberField(rawBody, "sortOrder") ?? 0
+
+  if (!type || !id || !name || !slug) {
+    apiError(400, "缺少必要参数")
+  }
+
+  if (type === "zone") {
+    try {
+      const currentZone = await ensureCanEditZone(params.actor, id)
+      const icon = readOptionalStringField(rawBody, "icon") || "📚"
+      await updateZone(id, buildZonePayload(
+        rawBody,
+        sortOrder,
+        name,
+        slug,
+        description,
+        icon,
+        currentZone.showInHomeFeed,
+        currentZone.allowUserPost,
+        currentZone.allowUserReply,
+        currentZone.allowPostAuthorOfflineComment,
+        currentZone.allowUserOfflineOwnComment,
+      ))
+
+      return { message: "分区已更新", action: "zone.update", targetType: "ZONE", targetId: id, detail: `更新分区 ${name}` }
+    } catch (error) {
+      handleStructureMutationError(type, error)
+    }
+  }
+
+  if (type === "board") {
+    try {
+      const currentBoard = await ensureCanEditBoard(params.actor, id)
+      const zoneId = readOptionalStringField(rawBody, "zoneId")
+      const advancedPayload = {
+        ...buildBoardAdvancedPayload(rawBody, currentBoard.configJson),
+        configJson: sanitizeBoardConfigPayloadForActor(params.actor, rawBody, currentBoard.configJson),
+      }
+      if (!isSiteAdmin(params.actor) && (zoneId || null) !== currentBoard.zoneId) {
+        apiError(403, "版主不能调整节点所属分区")
+      }
+      if (!isSiteAdmin(params.actor)) {
+        ensureModeratorBoardAdvancedLimits(advancedPayload)
+      }
+      const icon = readOptionalStringField(rawBody, "icon") || "💬"
+      await updateBoard(id, {
+        name,
+        slug,
+        description: description || undefined,
+        iconPath: icon,
+        sortOrder,
+        zoneId: zoneId || null,
+        status: rawBody.status === "HIDDEN" || rawBody.status === "DISABLED" ? rawBody.status as BoardStatus : BoardStatus.ACTIVE,
+        allowPost: rawBody.allowPost === undefined ? undefined : Boolean(rawBody.allowPost),
+        ...advancedPayload,
+      })
+
+      return { message: "节点已更新", action: "board.update", targetType: "BOARD", targetId: id, detail: `更新节点 ${name}` }
+    } catch (error) {
+      handleStructureMutationError(type, error)
+    }
+  }
+
+  apiError(400, "不支持的结构类型")
+}
+
+export async function deleteStructureItem(params: {
+  body: JsonObject
+  adminId: number
+  requestIp: string | null
+  actor: AdminActor
+}) {
+  const actorIsFounder = params.actor.role === "ADMIN" ? await isFounderAdmin(params.actor.id) : false
+  if (!await canAdminWithPermissionOverrides(params.actor, "admin.structure.delete", { isFounder: actorIsFounder })) {
+    apiError(403, "仅超级管理员可删除分区或节点")
+  }
+
+  const rawBody = params.body as Record<string, unknown>
+  const type = readOptionalStringField(rawBody, "type")
+  const id = readOptionalStringField(rawBody, "id")
+
+  if (!type || !id) {
+    apiError(400, "缺少必要参数")
+  }
+
+  if (type === "zone") {
+    const boardCount = await countBoardsByZone(id)
+
+    if (boardCount > 0) {
+      apiError(400, "请先删除或迁移该分区下的节点")
+    }
+
+    await deleteZone(id)
+
+    return { message: "分区已删除", action: "zone.delete", targetType: "ZONE", targetId: id, detail: "删除分区" }
+  }
+
+  if (type === "board") {
+    const postCount = await countPostsByBoard(id)
+
+    if (postCount > 0) {
+      apiError(400, "该节点下仍有帖子，不能直接删除")
+    }
+
+    await deleteBoard(id)
+
+    return { message: "节点已删除", action: "board.delete", targetType: "BOARD", targetId: id, detail: "删除节点" }
+  }
+
+  apiError(400, "不支持的结构类型")
+}

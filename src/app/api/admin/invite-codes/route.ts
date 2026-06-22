@@ -1,0 +1,55 @@
+import { apiError, apiSuccess, createAdminRouteHandler, readJsonBody, readOptionalStringField } from "@/lib/api-route"
+import { createInviteCodes, deleteInviteCodes, getInviteCodeList } from "@/lib/invite-codes"
+
+type DeleteScope = "single" | "used" | "unused" | "all"
+
+function readDeleteScope(value: unknown): DeleteScope {
+  if (value === "single" || value === "used" || value === "unused" || value === "all") {
+    return value
+  }
+
+  apiError(400, "删除范围不正确")
+}
+
+export const GET = createAdminRouteHandler(async () => {
+  const inviteCodes = await getInviteCodeList()
+  return apiSuccess(inviteCodes)
+}, {
+  errorMessage: "读取邀请码失败",
+  logPrefix: "[api/admin/invite-codes:GET] unexpected error",
+  unauthorizedMessage: "无权访问",
+  permission: "admin.operations.manage",
+})
+
+export const POST = createAdminRouteHandler(async ({ request, adminUser }) => {
+  const body = await readJsonBody(request)
+  const count = Math.max(1, Math.min(100, Number(body.count ?? 1) || 1))
+  const note = readOptionalStringField(body, "note")
+
+  const rows = await createInviteCodes({
+    count,
+    createdById: adminUser.id,
+    note,
+  })
+
+  return apiSuccess(rows, `已生成 ${rows.length} 个邀请码`)
+}, {
+  errorMessage: "生成邀请码失败",
+  logPrefix: "[api/admin/invite-codes:POST] unexpected error",
+  unauthorizedMessage: "无权操作",
+  permission: "admin.operations.manage",
+})
+
+export const DELETE = createAdminRouteHandler(async ({ request }) => {
+  const body = await readJsonBody(request)
+  const scope = readDeleteScope(body.scope)
+  const id = typeof body.id === "string" ? body.id : undefined
+  const deletedCount = await deleteInviteCodes({ scope, id })
+
+  return apiSuccess({ deletedCount }, `已删除 ${deletedCount} 个邀请码`)
+}, {
+  errorMessage: "删除邀请码失败",
+  logPrefix: "[api/admin/invite-codes:DELETE] unexpected error",
+  unauthorizedMessage: "无权操作",
+  permission: "admin.operations.manage",
+})

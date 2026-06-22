@@ -1,0 +1,252 @@
+import {
+  updateSiteSettingsHeaderApps,
+  updateSiteSettingsMarkdownEmoji,
+  updateSiteSettingsRecord,
+} from "@/db/site-settings-write-queries"
+import { apiError, readOptionalNumberField, readOptionalStringField, type JsonObject } from "@/lib/api-route"
+import { finalizeSiteSettingsUpdate, type SiteSettingsRecord } from "@/lib/admin-site-settings-shared"
+import { mergeEditorToolbarSettings, resolveEditorToolbarSettings } from "@/lib/editor-toolbar-settings"
+import { normalizeMarkdownEmojiItems, serializeMarkdownEmojiItems } from "@/lib/markdown-emoji"
+import { normalizePostListLoadMode } from "@/lib/post-list-load-mode"
+import { normalizePostListDisplayMode } from "@/lib/post-list-display"
+import { mergeFooterCopyrightSettings, mergeHomeFeedPostListLoadSettings, mergeHomeSidebarAnnouncementSettings, mergeLeftSidebarDisplaySettings, mergeLeftSidebarHomeSettings, mergeLeftSidebarNavigationSettings, mergePostPageSizeSettings, mergePostSlugGenerationSettings, mergeSiteBrandingSettings, mergeThemeCustomizationSettings, mergeUserProfileDisplaySettings, normalizeLeftSidebarDisplayMode, normalizeLeftSidebarHomeSettings, normalizeLeftSidebarNavigationMode, normalizePostSlugGenerationMode, resolveFooterCopyrightSettings, resolveHomeFeedPostListLoadSettings, resolveHomeSidebarAnnouncementSettings, resolveLeftSidebarDisplaySettings, resolveLeftSidebarHomeSettings, resolveLeftSidebarNavigationSettings, resolvePostPageSizeSettings, resolvePostSlugGenerationSettings, resolveSiteBrandingSettings, resolveThemeCustomizationSettingsFromAppState, resolveUserProfileDisplaySettings } from "@/lib/site-settings-app-state"
+import { mergeTopHeaderAppLinks, normalizeHeaderAppIconName, normalizeSiteHeaderAppLinks } from "@/lib/site-header-app-links"
+import { mergeSiteSearchSettings, resolveSiteSearchSettings } from "@/lib/site-search-settings"
+import { normalizeFooterLinks } from "@/lib/shared/config-parsers"
+import { resolveThemeCustomizationSettings } from "@/lib/theme"
+import { normalizePostEditableMinutes } from "@/lib/post-edit-window"
+
+export async function updateProfileSiteSettingsSection(existing: SiteSettingsRecord, body: JsonObject, section: string) {
+  if (section === "site-profile") {
+    const siteName = readOptionalStringField(body, "siteName")
+    const siteSlogan = readOptionalStringField(body, "siteSlogan")
+    const siteDescription = readOptionalStringField(body, "siteDescription")
+    const siteLogoText = readOptionalStringField(body, "siteLogoText")
+    const siteLogoPath = readOptionalStringField(body, "siteLogoPath")
+    const siteIconPath = readOptionalStringField(body, "siteIconPath")
+    const siteSeoKeywords = readOptionalStringField(body, "siteSeoKeywords").split(/[，,\n]+/).map((item) => item.trim()).filter(Boolean).join(",")
+    const analyticsCode = readOptionalStringField(body, "analyticsCode")
+    const footerCopyrightText = readOptionalStringField(body, "footerCopyrightText")
+    const postLinkDisplayMode = readOptionalStringField(body, "postLinkDisplayMode") === "ID" ? "ID" : "SLUG"
+    const existingPostSlugGenerationSettings = resolvePostSlugGenerationSettings({
+      appStateJson: existing.appStateJson,
+      modeFallback: "TITLE_TIMESTAMP",
+    })
+    const postSlugGenerationMode = normalizePostSlugGenerationMode(body.postSlugGenerationMode, existingPostSlugGenerationSettings.mode)
+    const homeFeedPostListDisplayMode = normalizePostListDisplayMode(body.homeFeedPostListDisplayMode)
+    const homeSidebarStatsCardEnabled = body.homeSidebarStatsCardEnabled === undefined ? existing.homeSidebarStatsCardEnabled : Boolean(body.homeSidebarStatsCardEnabled)
+    const existingHomeSidebarAnnouncementSettings = resolveHomeSidebarAnnouncementSettings({
+      appStateJson: existing.appStateJson,
+      enabledFallback: true,
+    })
+    const homeSidebarAnnouncementsEnabled = body.homeSidebarAnnouncementsEnabled === undefined
+      ? existingHomeSidebarAnnouncementSettings.enabled
+      : Boolean(body.homeSidebarAnnouncementsEnabled)
+    const existingUserProfileDisplaySettings = resolveUserProfileDisplaySettings({
+      appStateJson: existing.appStateJson,
+      ipLocationEnabledFallback: false,
+    })
+    const userProfileIpLocationEnabled = body.userProfileIpLocationEnabled === undefined
+      ? existingUserProfileDisplaySettings.ipLocationEnabled
+      : Boolean(body.userProfileIpLocationEnabled)
+    const userProfileIntroductionEnabled = body.userProfileIntroductionEnabled === undefined
+      ? existingUserProfileDisplaySettings.introductionEnabled
+      : Boolean(body.userProfileIntroductionEnabled)
+    const existingLeftSidebarDisplaySettings = resolveLeftSidebarDisplaySettings({
+      appStateJson: existing.appStateJson,
+      modeFallback: "DEFAULT",
+    })
+    const leftSidebarDisplayMode = normalizeLeftSidebarDisplayMode(body.leftSidebarDisplayMode, existingLeftSidebarDisplaySettings.mode)
+    const existingLeftSidebarNavigationSettings = resolveLeftSidebarNavigationSettings({
+      appStateJson: existing.appStateJson,
+      modeFallback: "DEFAULT",
+    })
+    const leftSidebarNavigationMode = normalizeLeftSidebarNavigationMode(body.leftSidebarNavigationMode, existingLeftSidebarNavigationSettings.mode)
+    const existingLeftSidebarHomeSettings = resolveLeftSidebarHomeSettings({
+      appStateJson: existing.appStateJson,
+    })
+    const leftSidebarHomeSettings = body.leftSidebarHome === undefined
+      ? existingLeftSidebarHomeSettings
+      : normalizeLeftSidebarHomeSettings(body.leftSidebarHome, existingLeftSidebarHomeSettings)
+    const existingHomeFeedPostListLoadSettings = resolveHomeFeedPostListLoadSettings({
+      appStateJson: existing.appStateJson,
+      loadModeFallback: normalizePostListLoadMode(undefined),
+    })
+    const homeFeedPostListLoadMode = normalizePostListLoadMode(body.homeFeedPostListLoadMode, existingHomeFeedPostListLoadSettings.loadMode)
+    const postEditableMinutes = normalizePostEditableMinutes(readOptionalNumberField(body, "postEditableMinutes"), 10)
+    const commentEditableMinutes = Math.max(0, readOptionalNumberField(body, "commentEditableMinutes") ?? 5)
+    const existingSearchSettings = resolveSiteSearchSettings(existing.appStateJson)
+    const searchEnabled = body.searchEnabled === undefined ? existingSearchSettings.enabled : Boolean(body.searchEnabled)
+    const existingFooterCopyrightSettings = resolveFooterCopyrightSettings({
+      appStateJson: existing.appStateJson,
+      textFallback: `${siteName} @ ${new Date().getFullYear()}`,
+      brandingVisibleFallback: true,
+    })
+    const existingSiteBrandingSettings = resolveSiteBrandingSettings({
+      appStateJson: existing.appStateJson,
+      iconPathFallback: "",
+    })
+    const existingThemeCustomizationSettings = resolveThemeCustomizationSettingsFromAppState({
+      appStateJson: existing.appStateJson,
+    })
+    const themeCustomization = resolveThemeCustomizationSettings(
+      body.themeCustomization === undefined ? existingThemeCustomizationSettings : body.themeCustomization,
+    )
+    const footerBrandingVisible = body.footerBrandingVisible === undefined
+      ? existingFooterCopyrightSettings.brandingVisible
+      : Boolean(body.footerBrandingVisible)
+    const existingPostPageSizeSettings = resolvePostPageSizeSettings({
+      appStateJson: existing.appStateJson,
+      homeFeedFallback: 35,
+      zonePostsFallback: 20,
+      boardPostsFallback: 20,
+      commentsFallback: 15,
+      hotTopicsFallback: 5,
+      postRelatedTopicsFallback: 5,
+    })
+    const homeFeedPostPageSize = Math.min(100, Math.max(1, readOptionalNumberField(body, "homeFeedPostPageSize") ?? existingPostPageSizeSettings.homeFeed))
+    const zonePostPageSize = Math.min(100, Math.max(1, readOptionalNumberField(body, "zonePostPageSize") ?? existingPostPageSizeSettings.zonePosts))
+    const boardPostPageSize = Math.min(100, Math.max(1, readOptionalNumberField(body, "boardPostPageSize") ?? existingPostPageSizeSettings.boardPosts))
+    const homeSidebarHotTopicsCount = Math.min(30, Math.max(1, readOptionalNumberField(body, "homeSidebarHotTopicsCount") ?? existingPostPageSizeSettings.hotTopics))
+    const postSidebarRelatedTopicsCount = Math.min(30, Math.max(1, readOptionalNumberField(body, "postSidebarRelatedTopicsCount") ?? existingPostPageSizeSettings.postRelatedTopics))
+
+    if (!siteName || !siteDescription) {
+      apiError(400, "站点名称和描述不能为空")
+    }
+
+    const appStateWithHomeSidebarAnnouncement = mergeHomeSidebarAnnouncementSettings(existing.appStateJson, {
+      enabled: homeSidebarAnnouncementsEnabled,
+    })
+
+    const appStateWithPostPageSizes = mergePostPageSizeSettings(appStateWithHomeSidebarAnnouncement, {
+      homeFeed: homeFeedPostPageSize,
+      zonePosts: zonePostPageSize,
+      boardPosts: boardPostPageSize,
+      comments: existingPostPageSizeSettings.comments,
+      hotTopics: homeSidebarHotTopicsCount,
+      postRelatedTopics: postSidebarRelatedTopicsCount,
+    })
+
+    const appStateWithHomeFeedPostListLoadMode = mergeHomeFeedPostListLoadSettings(appStateWithPostPageSizes, {
+      loadMode: homeFeedPostListLoadMode,
+    })
+
+    const appStateWithSearch = mergeSiteSearchSettings(appStateWithHomeFeedPostListLoadMode, {
+      enabled: searchEnabled,
+      externalEngines: existingSearchSettings.externalEngines,
+    })
+
+    const appStateWithLeftSidebarDisplay = mergeLeftSidebarDisplaySettings(appStateWithSearch, {
+      mode: leftSidebarDisplayMode,
+    })
+
+    const appStateWithLeftSidebarNavigation = mergeLeftSidebarNavigationSettings(appStateWithLeftSidebarDisplay, {
+      mode: leftSidebarNavigationMode,
+    })
+
+    const appStateWithLeftSidebarHome = mergeLeftSidebarHomeSettings(appStateWithLeftSidebarNavigation, leftSidebarHomeSettings)
+
+    const appStateWithPostSlugGeneration = mergePostSlugGenerationSettings(appStateWithLeftSidebarHome, {
+      mode: postSlugGenerationMode,
+    })
+
+    const appStateWithSiteBranding = mergeSiteBrandingSettings(appStateWithPostSlugGeneration, {
+      iconPath: body.siteIconPath === undefined
+        ? existingSiteBrandingSettings.iconPath || ""
+        : siteIconPath,
+    })
+
+    const appStateWithThemeDefaults = mergeThemeCustomizationSettings(appStateWithSiteBranding, themeCustomization)
+
+    const appStateWithUserProfileDisplay = mergeUserProfileDisplaySettings(appStateWithThemeDefaults, {
+      ipLocationEnabled: userProfileIpLocationEnabled,
+      introductionEnabled: userProfileIntroductionEnabled,
+    })
+
+    const appStateJson = mergeFooterCopyrightSettings(appStateWithUserProfileDisplay, {
+      text: footerCopyrightText || existingFooterCopyrightSettings.text || `${siteName} @ ${new Date().getFullYear()}`,
+      brandingVisible: footerBrandingVisible,
+    })
+
+    const settings = await updateSiteSettingsRecord(existing.id, {
+      siteName,
+      siteSlogan,
+      siteDescription,
+      siteLogoText,
+      siteLogoPath: siteLogoPath || null,
+      siteSeoKeywords,
+      analyticsCode: analyticsCode || null,
+      postLinkDisplayMode,
+      homeFeedPostListDisplayMode,
+      homeSidebarStatsCardEnabled,
+      appStateJson,
+      postEditableMinutes,
+      commentEditableMinutes,
+    })
+
+    return finalizeSiteSettingsUpdate({
+      settings,
+      message: "基础信息已保存",
+      revalidatePaths: ["/", "/write", "/admin"],
+    })
+  }
+
+  if (section === "site-apps") {
+    const headerAppLinks = normalizeSiteHeaderAppLinks(body.headerAppLinks)
+    const headerAppIconName = normalizeHeaderAppIconName(body.headerAppIconName)
+    const appStateJson = mergeTopHeaderAppLinks(existing.appStateJson, body.topHeaderAppLinks)
+
+    await updateSiteSettingsHeaderApps(existing.id, JSON.stringify(headerAppLinks), headerAppIconName, appStateJson)
+
+    return finalizeSiteSettingsUpdate({
+      settings: undefined,
+      message: "顶部导航已保存",
+      revalidatePaths: ["/", "/admin"],
+    })
+  }
+
+  if (section === "site-markdown-emoji") {
+    const markdownEmojiMap = normalizeMarkdownEmojiItems(body.markdownEmojiMap)
+    const markdownEmojiMapJson = serializeMarkdownEmojiItems(markdownEmojiMap)
+    const settings = await updateSiteSettingsMarkdownEmoji(existing.id, markdownEmojiMapJson)
+
+    return finalizeSiteSettingsUpdate({
+      settings,
+      message: "Markdown 表情已保存",
+      revalidatePaths: ["/", "/write", "/admin"],
+    })
+  }
+
+  if (section === "site-footer-links") {
+    const footerLinks = normalizeFooterLinks(body.footerLinks)
+    const settings = await updateSiteSettingsRecord(existing.id, {
+      footerLinksJson: JSON.stringify(footerLinks),
+    })
+
+    return finalizeSiteSettingsUpdate({
+      settings,
+      message: "页脚导航已保存",
+    })
+  }
+
+  if (section === "site-editor-toolbar") {
+    const currentSettings = resolveEditorToolbarSettings({
+      appStateJson: existing.appStateJson,
+    })
+    const appStateJson = mergeEditorToolbarSettings(
+      existing.appStateJson,
+      body.editorToolbar ?? currentSettings,
+    )
+    const settings = await updateSiteSettingsRecord(existing.id, {
+      appStateJson,
+    })
+
+    return finalizeSiteSettingsUpdate({
+      settings,
+      message: "编辑器工具栏已保存",
+      revalidatePaths: ["/write", "/admin"],
+    })
+  }
+
+  return null
+}

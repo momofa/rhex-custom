@@ -1,0 +1,421 @@
+import { parseNonNegativeSafeInteger } from "@/lib/shared/safe-integer"
+import type { RegistrationEmailTemplateSettings } from "@/lib/email-template-settings"
+import type { ThemeCustomizationSettings } from "@/lib/theme"
+import type { CommentLoadMode } from "@/lib/comment-load-mode"
+import type { PostListLoadMode } from "@/lib/post-list-load-mode"
+import type { CheckInRewardRange, CheckInRewardSettings } from "@/lib/check-in-reward"
+import type { VipNameColors } from "@/lib/vip-name-colors"
+import type { VipLevelIcons } from "@/lib/vip-level-icons"
+import type { SiteTippingGiftItem } from "@/lib/tipping-gifts"
+import type { VipTierPricing } from "@/lib/vip-tier-pricing"
+import type { PasswordPolicySettings, PasswordStrength } from "@/lib/password-policy"
+import type { CaptchaMode } from "@/lib/shared/config-parsers"
+import type { EmailBusinessSwitchSettings } from "@/lib/email-business-switches"
+import type { WatermarkFontAsset } from "@/lib/watermark-lib"
+
+export type { PasswordStrength }
+export type { EmailBusinessSwitchSettings } from "@/lib/email-business-switches"
+
+export const SITE_SETTINGS_STATE_KEY = "__siteSettings"
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+export function parseAppStateRoot(raw: string | null | undefined): Record<string, unknown> {
+  if (!raw) {
+    return {}
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return isRecord(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+export function readSiteSettingsState(raw: string | null | undefined) {
+  const root = parseAppStateRoot(raw)
+  const siteSettingsState = root[SITE_SETTINGS_STATE_KEY]
+  return isRecord(siteSettingsState) ? siteSettingsState : {}
+}
+
+export function writeSiteSettingsState(
+  appStateJson: string | null | undefined,
+  nextState: Record<string, unknown>,
+) {
+  const root = parseAppStateRoot(appStateJson)
+  root[SITE_SETTINGS_STATE_KEY] = nextState
+  return JSON.stringify(root)
+}
+
+export function normalizeNonNegativeInteger(value: unknown, fallback: number) {
+  return parseNonNegativeSafeInteger(value) ?? fallback
+}
+
+export function normalizeFileExtensionList(value: unknown, fallback: string[]) {
+  if (!Array.isArray(value)) {
+    return fallback
+  }
+
+  const normalized = Array.from(new Set(
+    value
+      .map((item) => (typeof item === "string" ? item.trim().toLowerCase().replace(/^\./, "") : ""))
+      .filter(Boolean),
+  ))
+
+  return normalized.length > 0 ? normalized : fallback
+}
+
+export function normalizeHexColor(value: unknown, fallback: string) {
+  const normalized = typeof value === "string" ? value.trim().toUpperCase() : ""
+  return /^#(?:[0-9A-F]{3}|[0-9A-F]{6})$/.test(normalized) ? normalized : fallback
+}
+
+export type LeftSidebarDisplayMode = "DEFAULT" | "HIDDEN" | "DOCKED" | "DOCKED_OPEN"
+
+export function normalizeLeftSidebarDisplayMode(
+  value: unknown,
+  fallback: LeftSidebarDisplayMode = "DEFAULT",
+): LeftSidebarDisplayMode {
+  const normalized = typeof value === "string" ? value.trim().toUpperCase().replace(/-/g, "_") : ""
+
+  switch (normalized) {
+    case "DEFAULT":
+    case "HIDDEN":
+    case "DOCKED":
+    case "DOCKED_OPEN":
+      return normalized
+    default:
+      return fallback
+  }
+}
+
+export type LeftSidebarNavigationMode = "DEFAULT" | "TREE"
+
+export function normalizeLeftSidebarNavigationMode(
+  value: unknown,
+  fallback: LeftSidebarNavigationMode = "DEFAULT",
+): LeftSidebarNavigationMode {
+  const normalized = typeof value === "string" ? value.trim().toUpperCase().replace(/-/g, "_") : ""
+
+  switch (normalized) {
+    case "DEFAULT":
+    case "TREE":
+      return normalized
+    default:
+      return fallback
+  }
+}
+
+export type ImageWatermarkPosition = "TOP_LEFT" | "TOP_RIGHT" | "BOTTOM_LEFT" | "BOTTOM_RIGHT" | "CENTER"
+
+export function normalizeImageWatermarkPosition(
+  value: unknown,
+  fallback: ImageWatermarkPosition,
+): ImageWatermarkPosition {
+  const normalized = typeof value === "string" ? value.trim().toUpperCase() : ""
+
+  switch (normalized) {
+    case "TOP_LEFT":
+    case "TOP_RIGHT":
+    case "BOTTOM_LEFT":
+    case "BOTTOM_RIGHT":
+    case "CENTER":
+      return normalized as ImageWatermarkPosition
+    default:
+      return fallback
+  }
+}
+
+export type CheckInMakeUpPriceSettings = VipTierPricing
+export type NicknameChangePointCostSettings = VipTierPricing
+export type IntroductionChangePointCostSettings = VipTierPricing
+export type AvatarChangePointCostSettings = VipTierPricing
+export type InviteCodePurchasePriceSettings = VipTierPricing
+
+export interface MarkdownImageUploadSettings {
+  enabled: boolean
+}
+
+export interface UploadObjectStorageSettings {
+  forcePathStyle: boolean
+}
+
+export interface ImageWatermarkSettings {
+  enabled: boolean
+  fontAssets: WatermarkFontAsset[]
+  textEnabled: boolean
+  text: string
+  textPosition: ImageWatermarkPosition
+  textTiled: boolean
+  textOpacity: number
+  textFontSize: number
+  textFontFamily: string
+  textMargin: number
+  textColor: string
+  logoEnabled: boolean
+  logoPath: string
+  logoPosition: ImageWatermarkPosition
+  logoTiled: boolean
+  logoOpacity: number
+  logoMargin: number
+  logoScalePercent: number
+  position: ImageWatermarkPosition
+  tiled: boolean
+  opacity: number
+  fontSize: number
+  fontFamily: string
+  margin: number
+  color: string
+}
+
+export interface AttachmentFeatureSettings {
+  uploadEnabled: boolean
+  downloadEnabled: boolean
+  minUploadLevel: number
+  minUploadVipLevel: number
+  allowedExtensions: string[]
+  maxFileSizeMb: number
+}
+
+export interface MessageMediaSettings {
+  enabled: boolean
+  imageUploadEnabled: boolean
+  fileUploadEnabled: boolean
+  promptAudioPath: string
+  realtimeEnabled: boolean
+  realtimeHeartbeatSeconds: number
+}
+
+export interface HomeSidebarAnnouncementSettings {
+  enabled: boolean
+}
+
+export interface LeftSidebarDisplaySettings {
+  mode: LeftSidebarDisplayMode
+}
+
+export interface LeftSidebarNavigationSettings {
+  mode: LeftSidebarNavigationMode
+}
+
+export interface LeftSidebarHomeSettings {
+  enabled: boolean
+  name: string
+  icon: string
+}
+
+export interface FooterCopyrightSettings {
+  text: string
+  brandingVisible: boolean
+}
+
+export interface SiteBrandingSettings {
+  iconPath: string
+}
+
+export interface UserProfileDisplaySettings {
+  ipLocationEnabled: boolean
+  introductionEnabled: boolean
+}
+
+export type SiteThemeCustomizationSettings = ThemeCustomizationSettings
+
+export interface RegisterNicknameLengthSettings {
+  minLength: number
+  maxLength: number
+}
+
+export type RegisterPasswordPolicySettings = PasswordPolicySettings
+
+export interface RegisterEmailWhitelistSettings {
+  enabled: boolean
+  domains: string[]
+}
+
+export interface SiteSecuritySettings {
+  sessionIpMismatchLogoutEnabled: boolean
+  loginIpChangeEmailAlertEnabled: boolean
+  passwordChangeRequireEmailVerification: boolean
+  oauthServerEnabled: boolean
+  oauthClientApplicationEnabled: boolean
+  paymentApplicationEnabled: boolean
+  paymentPlatformFeePercent: number
+  oauthAccessTokenTtlMinutes: number
+  oauthRefreshTokenTtlDays: number
+}
+
+export type SiteEmailBusinessSwitchSettings = EmailBusinessSwitchSettings
+
+export type PostSlugGenerationMode = "TITLE_TIMESTAMP" | "TIME36" | "PINYIN_TIME36" | "TITLE_TIME36" | "SEQUENTIAL_ID"
+
+export function normalizePostSlugGenerationMode(
+  value: unknown,
+  fallback: PostSlugGenerationMode = "TITLE_TIMESTAMP",
+): PostSlugGenerationMode {
+  return value === "TITLE_TIMESTAMP" || value === "TIME36" || value === "PINYIN_TIME36" || value === "TITLE_TIME36" || value === "SEQUENTIAL_ID"
+    ? value
+    : fallback
+}
+
+export interface PostSlugGenerationSettings {
+  mode: PostSlugGenerationMode
+}
+
+export interface HomeFeedPostListLoadSettings {
+  loadMode: PostListLoadMode
+}
+
+export interface HomeHotFeedSettings {
+  recentWindowHours: number
+}
+
+export interface PostPageSizeSettings {
+  homeFeed: number
+  zonePosts: number
+  boardPosts: number
+  comments: number
+  hotTopics: number
+  postRelatedTopics: number
+}
+
+export interface CommentAccessSettings {
+  guestCanView: boolean
+  initialVisibleReplies: number
+  loadMode: CommentLoadMode
+}
+
+export interface ForumAccessSettings {
+  requireLoginToBrowse: boolean
+}
+
+export interface SiteChatSettings {
+  enabled: boolean
+}
+
+export interface MentionRecommendationSettings {
+  defaultUsernames: string[]
+}
+
+export interface PostContentLengthSettings {
+  postTitleMinLength: number
+  postTitleMaxLength: number
+  postContentMinLength: number
+  postContentMaxLength: number
+  commentContentMinLength: number
+  commentContentMaxLength: number
+}
+
+export type InteractionGateAction = "POST_CREATE" | "COMMENT_CREATE"
+
+export type InteractionGateCondition =
+  | {
+      type: "EMAIL_VERIFIED"
+      enabled: true
+    }
+  | {
+      type: "PHONE_VERIFIED"
+      enabled: true
+    }
+  | {
+      type: "REGISTERED_MINUTES"
+      value: number
+    }
+
+export interface InteractionGateRule {
+  enabled: boolean
+  conditions: InteractionGateCondition[]
+}
+
+export interface InteractionGateSettings {
+  version: 1
+  actions: Record<InteractionGateAction, InteractionGateRule>
+}
+
+export interface AuthProviderSettings {
+  githubEnabled: boolean
+  googleEnabled: boolean
+  passkeyEnabled: boolean
+}
+
+export type SmsBuiltinProvider = "aliyun" | "tencent"
+
+export interface SmsProviderSettings {
+  enabled: boolean
+  provider: SmsBuiltinProvider
+  captchaMode: CaptchaMode
+  aliyunEndpoint: string
+  aliyunRegionId: string
+  aliyunSignName: string
+  aliyunTemplateCode: string
+  aliyunCodeParamName: string
+  tencentRegion: string
+  tencentEndpoint: string
+  tencentSmsSdkAppId: string
+  tencentSignName: string
+  tencentTemplateId: string
+  tencentTemplateParamKeys: string[]
+}
+
+export interface AuthPageShowcaseSettings {
+  enabled: boolean
+}
+
+export type VipLevelIconSettings = VipLevelIcons
+export type VipNameColorSettings = VipNameColors
+
+export interface RegistrationRewardSettings {
+  initialPoints: number
+}
+
+export interface RegisterInviteCodeHelpSettings {
+  enabled: boolean
+  title: string
+  url: string
+}
+
+export interface RedeemCodeHelpSettings {
+  enabled: boolean
+  title: string
+  url: string
+}
+
+export interface CheckInStreakSettings {
+  enabled: boolean
+  makeUpCountsTowardStreak: boolean
+  oldestDayLimit: number
+}
+
+export interface PostJackpotSettings {
+  enabled: boolean
+  minInitialPoints: number
+  maxInitialPoints: number
+  replyIncrementPoints: number
+  hitProbability: number
+}
+
+export interface PostRedPacketSettings {
+  randomClaimProbability: number
+}
+
+export interface AnonymousPostSettings {
+  enabled: boolean
+  price: number
+  dailyLimit: number
+  maskUserId: number | null
+  allowReplySwitch: boolean
+  defaultReplyAnonymous: boolean
+}
+
+export interface BoardTreasurySettings {
+  tipGiftTaxEnabled: boolean
+  tipGiftTaxRateBps: number
+}
+
+export interface BoardApplicationSettings {
+  enabled: boolean
+}
+
+export type { CheckInRewardRange, CheckInRewardSettings, RegistrationEmailTemplateSettings, SiteTippingGiftItem, VipTierPricing }

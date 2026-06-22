@@ -1,0 +1,12 @@
+services:
+  setup:
+    image: rhex-local:1.0.41
+    pull_policy: never
+
+  web:
+    image: rhex-local:1.0.41
+    pull_policy: never
+
+  worker:
+    image: rhex-local:1.0.41
+    pull_policy: never

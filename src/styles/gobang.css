@@ -1,0 +1,300 @@
+/* gobang.css */
+
+.chessboard-shell {
+  position: relative;
+  width: 100%;
+}
+
+.chessboard {
+  position: relative;
+  width: min(100%, 480px);
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 24px;
+  border: 1px solid hsl(var(--border) / 0.75);
+  background-color: #d8b07a;
+  background-image:
+    linear-gradient(180deg, rgba(255, 245, 225, 0.28) 0%, rgba(255, 245, 225, 0) 28%),
+    repeating-linear-gradient(8deg, rgba(121, 78, 28, 0.08) 0 2px, rgba(121, 78, 28, 0) 2px 22px),
+    linear-gradient(180deg, #e8c48c 0%, #d8b07a 48%, #c99a60 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 rgba(93, 55, 16, 0.14),
+    0 12px 28px hsl(var(--foreground) / 0.1);
+}
+
+.chessboard::before {
+  content: '';
+  position: absolute;
+  inset: 6.25%;
+  border-radius: 16px;
+  border: 1px solid rgba(88, 53, 20, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+
+.no-regret-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  pointer-events: none;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.14), rgba(15, 23, 42, 0.28));
+  backdrop-filter: blur(2px);
+}
+
+.no-regret-text {
+  max-width: 82%;
+  text-align: center;
+  font-size: clamp(17px, 5vw, 27px);
+  line-height: 1.5;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: rgba(255, 248, 236, 0.96);
+  text-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  animation: no-regret-fade 6s ease forwards;
+}
+
+.gobang-layout {
+  display: flex;
+  width: min(100%, 480px);
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gobang-stage {
+  position: relative;
+  display: inline-flex;
+  width: 100%;
+  flex-direction: column;
+}
+
+.gobang-actions {
+  width: 100%;
+}
+
+.gobang-easter-egg-button {
+  border: 0;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, hsl(var(--secondary)), hsl(var(--accent)));
+  color: hsl(var(--foreground));
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 10px 22px hsl(var(--foreground) / 0.08);
+  transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+}
+
+.gobang-easter-egg-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px hsl(var(--foreground) / 0.12);
+}
+
+.gobang-easter-egg-button:active {
+  transform: translateY(0);
+}
+
+.gobang-rules {
+  width: 100%;
+  border-radius: 20px;
+  border: 1px solid hsl(var(--border) / 0.7);
+  background: hsl(var(--background) / 0.88);
+  padding: 14px 16px;
+  box-shadow: 0 10px 24px hsl(var(--foreground) / 0.05);
+}
+
+.gobang-rules-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.gobang-rules-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: hsl(var(--foreground));
+}
+
+.gobang-rules-toggle {
+  border: 0;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.gobang-rules-toggle:hover {
+  color: hsl(var(--foreground));
+}
+
+.gobang-rules-list {
+  display: grid;
+  gap: 6px;
+}
+
+.gobang-rule-item {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: hsl(var(--muted-foreground));
+}
+
+.gobang-modal-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(4px);
+  border-radius: 24px;
+}
+
+.gobang-modal-card {
+  width: min(100%, 340px);
+}
+
+.board-surface {
+  position: absolute;
+  inset: 6.25%;
+}
+
+.board-svg {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: visible;
+}
+
+.board-svg-line {
+  stroke: rgba(78, 45, 15, 0.78);
+  stroke-width: 0.24;
+  shape-rendering: geometricPrecision;
+}
+
+.board-svg-star {
+  fill: rgba(60, 34, 12, 0.92);
+}
+
+.board-point {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  width: clamp(20px, 5.8%, 28px);
+  height: clamp(20px, 5.8%, 28px);
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  appearance: none;
+  transform: translate(-50%, -50%);
+}
+
+.board-point-hit {
+  width: clamp(12px, 3.8%, 18px);
+  height: clamp(12px, 3.8%, 18px);
+  border-radius: 9999px;
+  background: transparent;
+  transition: background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.board-point:hover .board-point-hit {
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 0 1px rgba(78, 45, 15, 0.15);
+  transform: scale(1.05);
+}
+
+.board-point:focus-visible {
+  outline: none;
+}
+
+.board-point:focus-visible .board-point-hit {
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 0 0 2px hsl(var(--ring));
+}
+
+.chess-piece {
+  position: absolute;
+  z-index: 4;
+  display: block;
+  width: clamp(20px, 4.6%, 24px);
+  height: clamp(20px, 4.6%, 24px);
+  min-width: 20px;
+  min-height: 20px;
+  border-radius: 9999px;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
+  opacity: 0;
+  transform: scale(0.72);
+  animation: place-piece 0.18s ease-out forwards;
+}
+
+.chess-piece.black {
+  background: radial-gradient(circle at 30% 30%, #5b5b5b 0%, #171717 58%, #090909 100%);
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.16), 0 6px 14px rgba(15, 23, 42, 0.35);
+}
+
+.chess-piece.white {
+  background: radial-gradient(circle at 30% 30%, #ffffff 0%, #f5f5f4 52%, #d6d3d1 100%);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.8), inset 0 -1px 2px rgba(120, 113, 108, 0.28), 0 6px 14px rgba(15, 23, 42, 0.18);
+}
+
+.chess-piece.last-move-dot::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: rgba(239, 68, 68, 0.95);
+  transform: translate(-50%, -50%);
+}
+
+.chess-piece.winning-piece {
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.75), 0 8px 20px rgba(251, 191, 36, 0.3);
+}
+
+@keyframes place-piece {
+  from {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes no-regret-fade {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.94);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  82% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px) scale(1.03);
+  }
+}

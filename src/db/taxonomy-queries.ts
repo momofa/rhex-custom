@@ -1,0 +1,365 @@
+import { prisma } from "@/db/client"
+import { buildHomeVisiblePostWhere } from "@/db/home-feed-visibility"
+import { buildPostListVisibilityWhere, type PostListVisibilityViewer } from "@/db/post-list-visibility"
+import type { Prisma } from "@/db/types"
+import { pinnedPostOrderBy, postListInclude } from "@/db/queries"
+import type { TaxonomyPostSort } from "@/lib/forum-taxonomy-sort"
+import { PUBLIC_READABLE_POST_STATUSES } from "@/lib/post-types"
+
+const taxonomyPostInclude = {
+  board: postListInclude.board,
+  author: postListInclude.author,
+  redPacket: {
+    select: {
+      id: true,
+    },
+  },
+  _count: {
+    select: {
+      attachments: true,
+    },
+  },
+  comments: {
+    where: { status: "NORMAL" },
+    orderBy: { createdAt: "desc" },
+    take: 1,
+    select: {
+      id: true,
+      userId: true,
+      useAnonymousIdentity: true,
+      content: true,
+      user: {
+        select: { username: true, nickname: true },
+      },
+    },
+  },
+} satisfies Prisma.PostInclude
+
+export function findAllTags() {
+  return prisma.tag.findMany({
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      postCount: true,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  })
+}
+
+export function findTagBySlugOrName(normalized: string) {
+  return prisma.tag.findFirst({
+    where: {
+      OR: [
+        { slug: normalized },
+        { name: normalized },
+      ],
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      postCount: true,
+    },
+  })
+}
+
+export function findTagPostsBySlugOrName(normalized: string) {
+  return prisma.post.findMany({
+    where: {
+      status: { in: [...PUBLIC_READABLE_POST_STATUSES] },
+      tags: {
+        some: {
+          tag: {
+            OR: [
+              { slug: normalized },
+              { name: normalized },
+            ],
+          },
+        },
+      },
+    },
+    include: postListInclude,
+    orderBy: pinnedPostOrderBy,
+  })
+}
+
+export function findTagListPage(options: { page: number; pageSize: number; sort: "hot" | "new" }) {
+  const normalizedPageSize = Math.min(Math.max(1, options.pageSize), 50)
+  const orderBy = options.sort === "new"
+    ? [{ createdAt: "desc" as const }, { name: "asc" as const }]
+    : [{ postCount: "desc" as const }, { createdAt: "desc" as const }, { name: "asc" as const }]
+
+  return prisma.tag.findMany({
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      postCount: true,
+    },
+    orderBy,
+    skip: (options.page - 1) * normalizedPageSize,
+    take: normalizedPageSize,
+  })
+}
+
+export function countTags() {
+  return prisma.tag.count()
+}
+
+export function findAllZonesWithBoards() {
+  return prisma.zone.findMany({
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
+    include: {
+      boards: {
+        where: { status: "ACTIVE" },
+        select: {
+          slug: true,
+          _count: {
+            select: {
+              posts: {
+                where: { status: { in: [...PUBLIC_READABLE_POST_STATUSES] } },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+}
+
+export function findZoneWithBoardsBySlug(slug: string) {
+  return prisma.zone.findUnique({
+    where: { slug },
+    include: {
+      boards: {
+        where: { status: "ACTIVE" },
+        select: {
+          slug: true,
+          _count: {
+            select: {
+              posts: {
+                where: { status: { in: [...PUBLIC_READABLE_POST_STATUSES] } },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+}
+
+export function findZoneBoardListBySlug(slug: string) {
+  return prisma.zone.findUnique({
+    where: { slug },
+    include: {
+      boards: {
+        where: { status: "ACTIVE" },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }],
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          iconPath: true,
+          _count: {
+            select: {
+              posts: {
+                where: { status: { in: [...PUBLIC_READABLE_POST_STATUSES] } },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+}
+
+export function findZoneBoardIdsBySlug(slug: string) {
+  return prisma.zone.findUnique({
+    where: { slug },
+    include: {
+      boards: {
+        where: { status: "ACTIVE" },
+        select: { id: true },
+      },
+    },
+  })
+}
+
+export function findZoneBoardIdsById(zoneId: string) {
+  return prisma.zone.findUnique({
+    where: { id: zoneId },
+    include: {
+      boards: {
+        where: { status: "ACTIVE" },
+        select: { id: true },
+      },
+    },
+  })
+}
+
+function getZonePinnedOrderBy(): Prisma.PostOrderByWithRelationInput[] {
+  return [
+    { pinScope: "asc" },
+    { createdAt: "desc" },
+  ]
+}
+
+function getTaxonomyPostOrderBy(sort: TaxonomyPostSort): Prisma.PostOrderByWithRelationInput[] {
+  if (sort === "new") {
+    return [{ createdAt: "desc" }, { id: "desc" }]
+  }
+
+  if (sort === "featured") {
+    return [{ publishedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }]
+  }
+
+  return [{ activityAt: "desc" }, { createdAt: "desc" }, { id: "desc" }]
+}
+
+function buildTaxonomyPostSortWhere(sort: TaxonomyPostSort): Prisma.PostWhereInput {
+  return sort === "featured" ? { isFeatured: true } : {}
+}
+
+export function findGlobalPinnedPosts(options?: { pageSize?: number; homeVisibleOnly?: boolean; viewer?: PostListVisibilityViewer | null }) {
+  const normalizedPageSize = typeof options?.pageSize === "number" ? Math.min(Math.max(1, options.pageSize), 50) : undefined
+
+  return prisma.post.findMany({
+    where: {
+      AND: [
+        options?.homeVisibleOnly ? buildHomeVisiblePostWhere() : {},
+        buildPostListVisibilityWhere(options?.viewer),
+      ],
+      pinScope: "GLOBAL",
+    },
+    include: taxonomyPostInclude,
+    orderBy: getZonePinnedOrderBy(),
+    take: normalizedPageSize,
+  })
+}
+
+export function findZonePinnedPosts(boardIds: string[], pageSize?: number, viewer?: PostListVisibilityViewer | null) {
+  const normalizedPageSize = typeof pageSize === "number" ? Math.min(Math.max(1, pageSize), 50) : undefined
+
+  return prisma.post.findMany({
+    where: {
+      AND: [buildPostListVisibilityWhere(viewer)],
+      pinScope: "ZONE",
+      boardId: {
+        in: boardIds,
+      },
+    },
+    include: taxonomyPostInclude,
+    orderBy: getZonePinnedOrderBy(),
+    take: normalizedPageSize,
+  })
+}
+
+export function findZoneNormalPosts(
+  boardIds: string[],
+  excludedPostIds: string[],
+  page: number,
+  pageSize: number,
+  sort: TaxonomyPostSort = "latest",
+  viewer?: PostListVisibilityViewer | null,
+) {
+  const normalizedPageSize = Math.min(Math.max(1, pageSize), 50)
+
+  return prisma.post.findMany({
+    where: {
+      AND: [buildPostListVisibilityWhere(viewer)],
+      boardId: {
+        in: boardIds,
+      },
+      ...buildTaxonomyPostSortWhere(sort),
+      id: excludedPostIds.length > 0 ? { notIn: excludedPostIds } : undefined,
+    },
+    include: taxonomyPostInclude,
+    orderBy: getTaxonomyPostOrderBy(sort),
+    skip: (page - 1) * normalizedPageSize,
+    take: normalizedPageSize,
+  })
+}
+
+export function countZoneNormalPosts(
+  boardIds: string[],
+  excludedPostIds: string[] = [],
+  sort: TaxonomyPostSort = "latest",
+  viewer?: PostListVisibilityViewer | null,
+) {
+  return prisma.post.count({
+    where: {
+      AND: [buildPostListVisibilityWhere(viewer)],
+      boardId: {
+        in: boardIds,
+      },
+      ...buildTaxonomyPostSortWhere(sort),
+      id: excludedPostIds.length > 0 ? { notIn: excludedPostIds } : undefined,
+    },
+  })
+}
+
+export function findBoardPinnedPosts(boardId: string, zoneBoardIds: string[], pageSize?: number, viewer?: PostListVisibilityViewer | null) {
+  const normalizedPageSize = typeof pageSize === "number" ? Math.min(Math.max(1, pageSize), 50) : undefined
+
+  return prisma.post.findMany({
+    where: {
+      AND: [buildPostListVisibilityWhere(viewer)],
+      OR: [
+        { pinScope: "GLOBAL" },
+        { pinScope: "ZONE", boardId: { in: zoneBoardIds } },
+        { pinScope: "BOARD", boardId },
+      ],
+    },
+    include: taxonomyPostInclude,
+    orderBy: getZonePinnedOrderBy(),
+    take: normalizedPageSize,
+  })
+}
+
+export function findBoardNormalPosts(
+  boardId: string,
+  excludedPostIds: string[],
+  page: number,
+  pageSize: number,
+  sort: TaxonomyPostSort = "latest",
+  viewer?: PostListVisibilityViewer | null,
+) {
+  const normalizedPageSize = Math.min(Math.max(1, pageSize), 50)
+
+  return prisma.post.findMany({
+    where: {
+      AND: [buildPostListVisibilityWhere(viewer)],
+      boardId,
+      ...buildTaxonomyPostSortWhere(sort),
+      id: excludedPostIds.length > 0 ? { notIn: excludedPostIds } : undefined,
+    },
+    include: taxonomyPostInclude,
+    orderBy: getTaxonomyPostOrderBy(sort),
+    skip: (page - 1) * normalizedPageSize,
+    take: normalizedPageSize,
+  })
+}
+
+export function countBoardNormalPosts(
+  boardId: string,
+  excludedPostIds: string[] = [],
+  sort: TaxonomyPostSort = "latest",
+  viewer?: PostListVisibilityViewer | null,
+) {
+  return prisma.post.count({
+    where: {
+      AND: [buildPostListVisibilityWhere(viewer)],
+      boardId,
+      ...buildTaxonomyPostSortWhere(sort),
+      id: excludedPostIds.length > 0 ? { notIn: excludedPostIds } : undefined,
+    },
+  })
+}
+
+export function findZonePostsByBoardIds(boardIds: string[], page: number, pageSize: number) {
+  return findZoneNormalPosts(boardIds, [], page, pageSize)
+}

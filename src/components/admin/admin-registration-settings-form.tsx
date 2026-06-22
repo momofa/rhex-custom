@@ -1,0 +1,690 @@
+"use client"
+
+import { CircleHelp } from "lucide-react"
+import { useEffect, useMemo, useState, type ReactNode } from "react"
+
+import { AdminInviteCodeManager } from "@/components/admin/admin-invite-code-manager"
+import {
+  AdminBooleanSelectField,
+  SettingsInputField as TextField,
+  SettingsSelectField,
+  SettingsTextareaField,
+} from "@/components/admin/admin-settings-fields"
+import type { AdminRegistrationSettingsFormProps } from "@/components/admin/admin-basic-settings.types"
+import { Modal } from "@/components/ui/modal"
+import { Button } from "@/components/ui/rbutton"
+import { toast } from "@/components/ui/toast"
+import { adminPost } from "@/lib/admin-client"
+import { EMAIL_BUSINESS_SWITCH_DEFINITIONS, type EmailBusinessSwitchKey } from "@/lib/email-business-switches"
+import { renderEmailTemplate } from "@/lib/email-template-settings"
+import { getPasswordStrengthDescription, getPasswordStrengthLabel, PASSWORD_STRENGTH_VALUES, type PasswordStrength } from "@/lib/password-policy"
+
+const passwordStrengthOptions = PASSWORD_STRENGTH_VALUES.map((value) => ({
+  value,
+  label: `${getPasswordStrengthLabel(value)} - ${getPasswordStrengthDescription(value)}`,
+}))
+
+function extractEmailAddress(value: string) {
+  const matched = value.match(/<([^<>@\s]+@[^<>@\s]+)>/)
+
+  if (matched?.[1]) {
+    return matched[1]
+  }
+
+  return /\S+@\S+\.\S+/.test(value) ? value.trim() : ""
+}
+
+function EmailTemplateSection({
+  title,
+  description,
+  subject,
+  text,
+  html,
+  onSubjectChange,
+  onTextChange,
+  onHtmlChange,
+  previewVariables,
+  variableHelpText,
+}: {
+  title: string
+  description: string
+  subject: string
+  text: string
+  html: string
+  onSubjectChange: (value: string) => void
+  onTextChange: (value: string) => void
+  onHtmlChange: (value: string) => void
+  previewVariables: Record<string, string>
+  variableHelpText?: string
+}) {
+  const renderedSubject = renderEmailTemplate(subject, previewVariables)
+  const renderedText = renderEmailTemplate(text, previewVariables)
+  const renderedHtml = renderEmailTemplate(html, previewVariables)
+
+  return (
+    <div className="space-y-4 rounded-xl border border-border bg-background p-4">
+      <div>
+        <h4 className="text-sm font-semibold">{title}</h4>
+        <p className="mt-1 text-xs leading-6 text-muted-foreground">{description}</p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <TextField label="邮件主题" value={subject} onChange={onSubjectChange} placeholder="输入邮件主题模板" />
+        <div className="rounded-[18px] border border-dashed border-border bg-card/60 px-4 py-3 text-xs leading-6 text-muted-foreground">
+          {variableHelpText ?? "可用变量会按当前模板对应的示例变量动态展示。"}
+          <div className="mt-3 grid gap-1">
+            <p>当前预览变量：</p>
+            {Object.entries(previewVariables).map(([key, value]) => (
+              <p key={key}><code>{`{{${key}}}`}</code> = {value || "(空)"}</p>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="space-y-2">
+        <p className="text-sm font-medium">纯文本模板</p>
+        <textarea
+          value={text}
+          onChange={(event) => onTextChange(event.target.value)}
+          className="min-h-[120px] w-full rounded-xl border border-border bg-card px-4 py-3 text-sm outline-hidden"
+          placeholder="输入纯文本邮件内容模板"
+        />
+      </div>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <div className="space-y-2">
+          <p className="text-sm font-medium">HTML 模板</p>
+          <textarea
+            value={html}
+            onChange={(event) => onHtmlChange(event.target.value)}
+            className="min-h-[200px] w-full rounded-xl border border-border bg-card px-4 py-3 font-mono text-xs leading-6 outline-hidden"
+            placeholder="输入 HTML 邮件内容模板"
+          />
+        </div>
+        <div className="space-y-3 rounded-xl border border-border bg-card/60 p-4">
+          <div>
+            <p className="text-sm font-medium">模板预览</p>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">使用当前示例变量渲染主题、纯文本和 HTML，用于检查变量替换和版式效果。</p>
+          </div>
+          <div className="rounded-[16px] border border-border bg-background px-4 py-3">
+            <p className="text-xs text-muted-foreground">渲染后的主题</p>
+            <p className="mt-1 break-all text-sm font-medium">{renderedSubject || "（空）"}</p>
+          </div>
+          <div className="rounded-[16px] border border-border bg-background px-4 py-3">
+            <p className="text-xs text-muted-foreground">渲染后的纯文本</p>
+            <pre className="mt-2 whitespace-pre-wrap break-words text-xs leading-6 text-foreground">{renderedText || "（空）"}</pre>
+          </div>
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">HTML 预览</p>
+            <iframe
+              title={`${title} HTML 预览`}
+              srcDoc={renderedHtml || "<div style='font-family:Arial,sans-serif;color:#666;padding:16px'>（空）</div>"}
+              sandbox=""
+              className="h-80 w-full rounded-[16px] border border-border bg-white"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CaptchaModeField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: "OFF" | "TURNSTILE" | "BUILTIN" | "POW"
+  onChange: (value: "OFF" | "TURNSTILE" | "BUILTIN" | "POW") => void
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-medium">{label}</p>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value as "OFF" | "TURNSTILE" | "BUILTIN" | "POW")}
+        className="h-11 w-full rounded-full border border-border bg-background px-4 text-sm outline-hidden"
+      >
+        <option value="OFF">关闭</option>
+        <option value="TURNSTILE">Cloudflare Turnstile</option>
+        <option value="BUILTIN">自建图形验证码</option>
+        <option value="POW">PoW 工作量证明</option>
+      </select>
+    </div>
+  )
+}
+
+function FieldGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-3">
+      <p className="text-sm font-semibold">{title}</p>
+      {children}
+    </div>
+  )
+}
+
+export function AdminRegistrationSettingsForm({
+  activeSubTab,
+  draft,
+  updateDraftField,
+  initialInviteCodes,
+}: AdminRegistrationSettingsFormProps) {
+  const [authDocOpen, setAuthDocOpen] = useState(false)
+  const [siteOrigin, setSiteOrigin] = useState("https://your-domain.com")
+  const [smtpTestRecipient, setSmtpTestRecipient] = useState(() => extractEmailAddress(draft.smtpFrom) || draft.smtpUser || "")
+  const [isSendingSmtpTest, setIsSendingSmtpTest] = useState(false)
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setSiteOrigin(window.location.origin)
+    }
+  }, [])
+
+  const siteHost = useMemo(() => siteOrigin.replace(/^https?:\/\//, "").replace(/\/.*$/, ""), [siteOrigin])
+  const resolvedPasskeyRpId = draft.passkeyRpId || siteHost
+  const resolvedPasskeyRpName = draft.passkeyRpName || draft.siteName || "你的站点名称"
+  const resolvedPasskeyOrigin = draft.passkeyOrigin || siteOrigin
+  const registerVerificationPreviewVariables = useMemo(() => ({
+    siteName: draft.siteName.trim() || "示例站点",
+    code: "246810",
+    username: "",
+  }), [draft.siteName])
+  const resetPasswordPreviewVariables = useMemo(() => ({
+    siteName: draft.siteName.trim() || "示例站点",
+    code: "864209",
+    username: "demo_user",
+  }), [draft.siteName])
+  const passwordChangePreviewVariables = useMemo(() => ({
+    siteName: draft.siteName.trim() || "示例站点",
+    code: "531842",
+    username: "demo_user",
+  }), [draft.siteName])
+  const loginIpChangeAlertPreviewVariables = useMemo(() => ({
+    siteName: draft.siteName.trim() || "示例站点",
+    displayName: "演示用户",
+    username: "demo_user",
+    currentIp: "203.0.113.25",
+    previousIp: "198.51.100.8",
+    loginAt: "2026-04-15 21:48:00",
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/136.0 Safari/537.36",
+  }), [draft.siteName])
+  const paymentOrderSuccessPreviewVariables = useMemo(() => ({
+    siteName: draft.siteName.trim() || "示例站点",
+    orderSubject: "积分充值 · 330积分",
+    merchantOrderNo: "pay_20260415_demo123456",
+    bizScene: "points.topup",
+    amount: "CNY 30.00",
+    providerCode: "alipay",
+    channelCode: "alipay.page",
+    paidAt: "2026-04-15 21:30:00",
+    username: "demo_user",
+    pointName: "积分",
+    points: "300",
+    bonusPoints: "30",
+    totalPoints: "330",
+  }), [draft.siteName])
+
+  async function handleSendSmtpTest() {
+    setIsSendingSmtpTest(true)
+
+    try {
+      const result = await adminPost("/api/admin/site-settings/smtp-test", {
+        recipient: smtpTestRecipient,
+        siteName: draft.siteName,
+        smtpHost: draft.smtpHost,
+        smtpPort: Number(draft.smtpPort),
+        smtpUser: draft.smtpUser,
+        smtpPass: draft.smtpPass,
+        smtpFrom: draft.smtpFrom,
+        smtpSecure: draft.smtpSecure,
+      }, {
+        defaultSuccessMessage: "测试邮件发送成功",
+        defaultErrorMessage: "测试邮件发送失败",
+      })
+      toast.success(result.message, "发送成功")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "测试邮件发送失败，请稍后再试", "发送失败")
+    } finally {
+      setIsSendingSmtpTest(false)
+    }
+  }
+
+  function updateEmailBusinessSwitch(key: EmailBusinessSwitchKey, enabled: boolean) {
+    updateDraftField("emailBusinessSwitches", {
+      ...draft.emailBusinessSwitches,
+      [key]: enabled,
+    })
+  }
+
+  return (
+    <>
+      {activeSubTab === "invite" ? (
+        <div className="rounded-xl border border-border p-5 space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold">注册与邀请码</h3>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">控制注册开关、邀请码策略，以及用户邀请奖励。</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <AdminBooleanSelectField label="允许新用户注册" checked={draft.registrationEnabled} onChange={(value) => updateDraftField("registrationEnabled", value)} />
+            <AdminBooleanSelectField label="显示登录/注册页左侧内容" checked={draft.authPageShowcaseEnabled} onChange={(value) => updateDraftField("authPageShowcaseEnabled", value)} />
+            <AdminBooleanSelectField label="显示邀请码输入框" checked={draft.registerInviteCodeEnabled} onChange={(value) => updateDraftField("registerInviteCodeEnabled", value)} />
+            <AdminBooleanSelectField label="注册必须邀请码" checked={draft.registrationRequireInviteCode} onChange={(value) => updateDraftField("registrationRequireInviteCode", value)} />
+            <AdminBooleanSelectField label="开启积分购买邀请码" checked={draft.inviteCodePurchaseEnabled} onChange={(value) => updateDraftField("inviteCodePurchaseEnabled", value)} />
+          </div>
+          {draft.registerInviteCodeEnabled ? (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <AdminBooleanSelectField label="邀请码输入框链接开关" checked={draft.registerInviteCodeHelpEnabled} onChange={(value) => updateDraftField("registerInviteCodeHelpEnabled", value)} />
+              <TextField label="链接标题" value={draft.registerInviteCodeHelpTitle} onChange={(value) => updateDraftField("registerInviteCodeHelpTitle", value)} placeholder="如何获得邀请码？" />
+              <TextField label="链接地址" value={draft.registerInviteCodeHelpUrl} onChange={(value) => updateDraftField("registerInviteCodeHelpUrl", value)} placeholder="如 /faq/invite-codes 或 https://example.com/help" />
+            </div>
+          ) : null}
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <TextField label="初始注册赠送积分" value={draft.registerInitialPoints} onChange={(value) => updateDraftField("registerInitialPoints", value)} placeholder="如 0" />
+            <TextField label="邀请人奖励数量" value={draft.inviteRewardInviter} onChange={(value) => updateDraftField("inviteRewardInviter", value)} placeholder="如 10" />
+            <TextField label="被邀请人奖励数量" value={draft.inviteRewardInvitee} onChange={(value) => updateDraftField("inviteRewardInvitee", value)} placeholder="如 5" />
+          </div>
+          <p className="text-xs leading-6 text-muted-foreground">填写 `0` 表示新用户首次注册时不额外赠送积分；若大于 `0`，会在注册成功后单独写入一条积分审计日志。</p>
+        </div>
+      ) : null}
+
+      {activeSubTab === "captcha" ? (
+        <div className="rounded-xl border border-border p-5 space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold">注册防机器人验证码</h3>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">支持关闭、Cloudflare Turnstile、自建图形验证码与 PoW 工作量证明四种模式。短信发送前校验模式在“短信配置”中单独控制。</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <CaptchaModeField label="注册验证码模式" value={draft.registerCaptchaMode} onChange={(value) => updateDraftField("registerCaptchaMode", value)} />
+            <CaptchaModeField label="登录验证码模式" value={draft.loginCaptchaMode} onChange={(value) => updateDraftField("loginCaptchaMode", value)} />
+            <TextField label="Turnstile Site Key" value={draft.turnstileSiteKey} onChange={(value) => updateDraftField("turnstileSiteKey", value)} placeholder="填写 Cloudflare Turnstile 公钥" />
+            <TextField label="Turnstile Secret Key" type="password" value={draft.turnstileSecretKey} onChange={(value) => updateDraftField("turnstileSecretKey", value)} placeholder="填写 Cloudflare Turnstile 私钥" />
+          </div>
+          <p className="text-xs leading-6 text-muted-foreground">当模式为 `TURNSTILE` 时，需要同时填写 Site Key 和 Secret Key；当模式为 `BUILTIN` 时，系统会使用站点自建图形验证码；当模式为 `POW` 时，系统会下发签名挑战并要求浏览器完成一次工作量证明，默认读取 `POW_CAPTCHA_SECRET_KEY`，未设置时回退到 `CAPTCHA_SECRET_KEY`。</p>
+        </div>
+      ) : null}
+
+      {activeSubTab === "invite-codes" ? <AdminInviteCodeManager initialInviteCodes={initialInviteCodes} /> : null}
+
+      {activeSubTab === "fields" ? (
+        <div className="rounded-xl border border-border p-5 space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold">注册表单字段</h3>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">邮箱、手机、昵称、性别、邀请人等字段的显示与必填策略。</p>
+          </div>
+          <div className="grid gap-4 xl:grid-cols-3">
+            <FieldGroup title="邮箱">
+              <AdminBooleanSelectField label="显示邮箱输入框" checked={draft.registerEmailEnabled} onChange={(value) => updateDraftField("registerEmailEnabled", value)} />
+              <AdminBooleanSelectField label="邮箱必填" checked={draft.registerEmailRequired} onChange={(value) => updateDraftField("registerEmailRequired", value)} />
+              <AdminBooleanSelectField label="邮箱需要验证" checked={draft.registerEmailVerification} onChange={(value) => updateDraftField("registerEmailVerification", value)} />
+              <AdminBooleanSelectField label="启用邮箱后缀白名单" checked={draft.registerEmailWhitelistEnabled} onChange={(value) => updateDraftField("registerEmailWhitelistEnabled", value)} />
+              {draft.registerEmailWhitelistEnabled ? (
+                <SettingsTextareaField
+                  label="允许的邮箱后缀"
+                  value={draft.registerEmailWhitelistDomains}
+                  onChange={(value) => updateDraftField("registerEmailWhitelistDomains", value)}
+                  placeholder={"支持换行、空格或逗号分隔，如\nqq.com\ngmail.com\nexample.org"}
+                />
+              ) : null}
+            </FieldGroup>
+            <FieldGroup title="手机">
+              <AdminBooleanSelectField label="显示手机输入框" checked={draft.registerPhoneEnabled} onChange={(value) => updateDraftField("registerPhoneEnabled", value)} />
+              <AdminBooleanSelectField label="手机必填" checked={draft.registerPhoneRequired} onChange={(value) => updateDraftField("registerPhoneRequired", value)} />
+              <AdminBooleanSelectField label="手机需要验证" checked={draft.registerPhoneVerification} onChange={(value) => updateDraftField("registerPhoneVerification", value)} />
+            </FieldGroup>
+            <FieldGroup title="其它字段">
+              <AdminBooleanSelectField label="显示昵称输入框" checked={draft.registerNicknameEnabled} onChange={(value) => updateDraftField("registerNicknameEnabled", value)} />
+              <AdminBooleanSelectField label="昵称必填" checked={draft.registerNicknameRequired} onChange={(value) => updateDraftField("registerNicknameRequired", value)} />
+              <TextField label="昵称最小字符数" value={draft.registerNicknameMinLength} onChange={(value) => updateDraftField("registerNicknameMinLength", value)} placeholder="如 1" />
+              <TextField label="昵称最大字符数" value={draft.registerNicknameMaxLength} onChange={(value) => updateDraftField("registerNicknameMaxLength", value)} placeholder="如 20" />
+              <AdminBooleanSelectField label="显示性别选项" checked={draft.registerGenderEnabled} onChange={(value) => updateDraftField("registerGenderEnabled", value)} />
+              <AdminBooleanSelectField label="性别必填" checked={draft.registerGenderRequired} onChange={(value) => updateDraftField("registerGenderRequired", value)} />
+              <AdminBooleanSelectField label="显示邀请人输入框" checked={draft.registerInviterEnabled} onChange={(value) => updateDraftField("registerInviterEnabled", value)} />
+            </FieldGroup>
+          </div>
+          <p className="text-xs leading-6 text-muted-foreground">昵称长度限制会同时应用到注册、用户自己修改资料，以及管理员后台修改用户昵称。</p>
+        </div>
+      ) : null}
+
+      {activeSubTab === "security" ? (
+        <div className="rounded-xl border border-border p-5 space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold">账号安全</h3>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">控制会话 IP 保护、异地登录邮件提醒，以及用户在个人页面修改密码时是否必须完成邮箱验证码验证。</p>
+          </div>
+          <div className="grid gap-4 xl:grid-cols-3">
+            <FieldGroup title="会话保护">
+              <AdminBooleanSelectField
+                label="IP 不一致自动踢下线"
+                checked={draft.sessionIpMismatchLogoutEnabled}
+                onChange={(value) => updateDraftField("sessionIpMismatchLogoutEnabled", value)}
+              />
+              <p className="text-xs leading-6 text-muted-foreground">开启后，会话会绑定登录时记录的 IP；后续请求 IP 与登录 IP 不一致时，当前登录态会立即失效。若用户常处于移动网络、代理或出口 IP 经常变化的环境，可关闭以减少误踢。</p>
+            </FieldGroup>
+            <FieldGroup title="登录安全提醒">
+              <AdminBooleanSelectField
+                label="登录 IP 变化发送邮件提醒"
+                checked={draft.loginIpChangeEmailAlertEnabled}
+                onChange={(value) => updateDraftField("loginIpChangeEmailAlertEnabled", value)}
+              />
+              <p className="text-xs leading-6 text-muted-foreground">仅当用户上次登录 IP 与本次登录 IP 不一致时入队发送。任务执行时会再次检查开关、SMTP 和用户已验证邮箱，条件不满足会自动跳过。</p>
+            </FieldGroup>
+            <FieldGroup title="密码修改验证">
+              <AdminBooleanSelectField
+                label="修改密码必须邮箱验证"
+                checked={draft.passwordChangeRequireEmailVerification}
+                onChange={(value) => updateDraftField("passwordChangeRequireEmailVerification", value)}
+              />
+              <p className="text-xs leading-6 text-muted-foreground">开启后，用户中心修改密码除了校验当前密码，还必须输入发送到已验证邮箱的验证码。前台也会提前检查邮箱和邮件能力，不满足条件时直接提示不可用。</p>
+            </FieldGroup>
+            <FieldGroup title="密码策略">
+              <TextField
+                label="最小密码位数"
+                value={draft.registerPasswordMinLength}
+                onChange={(value) => updateDraftField("registerPasswordMinLength", value)}
+                placeholder="如 8"
+                description="取值范围 6-64 位，影响注册、找回密码和用户修改密码。"
+              />
+              <SettingsSelectField
+                label="密码强度"
+                value={draft.registerPasswordStrength}
+                onChange={(value) => updateDraftField("registerPasswordStrength", value as PasswordStrength)}
+                options={passwordStrengthOptions}
+                description="基础强度只校验长度；中等强度要求字母和数字；高强度要求大小写字母、数字和特殊字符。"
+              />
+            </FieldGroup>
+            <FieldGroup title="用户名 / 昵称敏感词">
+              <AdminBooleanSelectField
+                label="启用用户名和昵称敏感词拦截"
+                checked={draft.usernameSensitiveWordsEnabled}
+                onChange={(value) => updateDraftField("usernameSensitiveWordsEnabled", value)}
+              />
+              <SettingsTextareaField
+                label="敏感词列表"
+                value={draft.usernameSensitiveWords}
+                onChange={(value) => updateDraftField("usernameSensitiveWords", value)}
+                placeholder={"支持换行、空格或逗号分隔，如\nadmin\nroot\n官方"}
+                description="注册用户名、第三方登录补全用户名，以及用户修改昵称时都会按包含匹配拦截，大小写不敏感。"
+              />
+            </FieldGroup>
+          </div>
+          {!draft.smtpEnabled ? (
+            <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-xs leading-6 text-amber-800">
+              当前尚未启用 SMTP。即使这里开启登录 IP 变化邮件提醒或改密邮箱验证，相关能力仍会自动跳过或提示“邮件能力未配置”；会话 IP 保护开关不受 SMTP 影响。
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {activeSubTab === "email-templates" ? (
+        <div className="rounded-xl border border-border p-5 space-y-5">
+          <div>
+            <h3 className="text-sm font-semibold">邮件模板编辑</h3>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">编辑注册验证码、找回密码验证码、修改密码验证码、登录安全提醒以及支付成功通知邮件模板。每个模板支持的变量会在对应卡片内单独展示。</p>
+          </div>
+
+          <EmailTemplateSection
+            title="注册验证码邮件"
+            description="用户在注册表单中获取邮箱验证码时发送。"
+            subject={draft.registerVerificationEmailSubject}
+            text={draft.registerVerificationEmailText}
+            html={draft.registerVerificationEmailHtml}
+            onSubjectChange={(value) => updateDraftField("registerVerificationEmailSubject", value)}
+            onTextChange={(value) => updateDraftField("registerVerificationEmailText", value)}
+            onHtmlChange={(value) => updateDraftField("registerVerificationEmailHtml", value)}
+            previewVariables={registerVerificationPreviewVariables}
+            variableHelpText={"可用变量：{{siteName}}、{{code}}、{{username}}。其中注册验证码邮件通常不会传入 {{username}}，留空会自动替换为空字符串。"}
+          />
+
+          <EmailTemplateSection
+            title="找回密码验证码邮件"
+            description="用户在忘记密码流程中获取邮箱验证码时发送。"
+            subject={draft.resetPasswordEmailSubject}
+            text={draft.resetPasswordEmailText}
+            html={draft.resetPasswordEmailHtml}
+            onSubjectChange={(value) => updateDraftField("resetPasswordEmailSubject", value)}
+            onTextChange={(value) => updateDraftField("resetPasswordEmailText", value)}
+            onHtmlChange={(value) => updateDraftField("resetPasswordEmailHtml", value)}
+            previewVariables={resetPasswordPreviewVariables}
+            variableHelpText={"可用变量：{{siteName}}、{{code}}、{{username}}。"}
+          />
+
+          <EmailTemplateSection
+            title="修改密码验证码邮件"
+            description="用户在个人中心修改密码，且后台开启“修改密码必须邮箱验证”时发送。"
+            subject={draft.passwordChangeEmailSubject}
+            text={draft.passwordChangeEmailText}
+            html={draft.passwordChangeEmailHtml}
+            onSubjectChange={(value) => updateDraftField("passwordChangeEmailSubject", value)}
+            onTextChange={(value) => updateDraftField("passwordChangeEmailText", value)}
+            onHtmlChange={(value) => updateDraftField("passwordChangeEmailHtml", value)}
+            previewVariables={passwordChangePreviewVariables}
+            variableHelpText={"可用变量：{{siteName}}、{{code}}、{{username}}。"}
+          />
+
+          <EmailTemplateSection
+            title="登录安全提醒邮件"
+            description="用户登录成功后，若后台开启“登录 IP 变化发送邮件提醒”且本次 IP 与上次不同，则通过后台任务发送。"
+            subject={draft.loginIpChangeAlertEmailSubject}
+            text={draft.loginIpChangeAlertEmailText}
+            html={draft.loginIpChangeAlertEmailHtml}
+            onSubjectChange={(value) => updateDraftField("loginIpChangeAlertEmailSubject", value)}
+            onTextChange={(value) => updateDraftField("loginIpChangeAlertEmailText", value)}
+            onHtmlChange={(value) => updateDraftField("loginIpChangeAlertEmailHtml", value)}
+            previewVariables={loginIpChangeAlertPreviewVariables}
+            variableHelpText={"可用变量：{{siteName}}、{{displayName}}、{{username}}、{{currentIp}}、{{previousIp}}、{{loginAt}}、{{userAgent}}。"}
+          />
+
+          <EmailTemplateSection
+            title="支付成功通知邮件"
+            description="支付网关订单支付成功并履约成功后，按支付网关后台设置的通知邮箱发送。"
+            subject={draft.paymentOrderSuccessEmailSubject}
+            text={draft.paymentOrderSuccessEmailText}
+            html={draft.paymentOrderSuccessEmailHtml}
+            onSubjectChange={(value) => updateDraftField("paymentOrderSuccessEmailSubject", value)}
+            onTextChange={(value) => updateDraftField("paymentOrderSuccessEmailText", value)}
+            onHtmlChange={(value) => updateDraftField("paymentOrderSuccessEmailHtml", value)}
+            previewVariables={paymentOrderSuccessPreviewVariables}
+            variableHelpText={"可用变量：{{siteName}}、{{orderSubject}}、{{merchantOrderNo}}、{{bizScene}}、{{amount}}、{{providerCode}}、{{channelCode}}、{{paidAt}}、{{username}}、{{pointName}}、{{points}}、{{bonusPoints}}、{{totalPoints}}。"}
+          />
+        </div>
+      ) : null}
+
+      {activeSubTab === "email-switches" ? (
+        <div className="rounded-xl border border-border p-5 space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold">业务邮件开关</h3>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">系统级控制每类业务邮件是否发送；关闭某一项只影响对应业务，其它保持开启的业务邮件会继续正常发送。</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {EMAIL_BUSINESS_SWITCH_DEFINITIONS.map((item) => (
+              <AdminBooleanSelectField
+                key={item.key}
+                label={item.label}
+                checked={draft.emailBusinessSwitches[item.key]}
+                onChange={(value) => updateEmailBusinessSwitch(item.key, value)}
+                description={item.description}
+              />
+            ))}
+          </div>
+          {!draft.smtpEnabled ? (
+            <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50 px-4 py-3 text-xs leading-6 text-amber-800">
+              当前尚未启用 SMTP。业务邮件开关会保存，但只有 SMTP 邮件发送配置完整并启用后，开启的业务邮件才会实际发出。
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {activeSubTab === "auth" ? (
+        <>
+          <div className="rounded-xl border border-border p-5 space-y-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold">第三方与 Passkey 登录</h3>
+                <button
+                  type="button"
+                  onClick={() => setAuthDocOpen(true)}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                  aria-label="查看第三方与 Passkey 对接文档"
+                  title="查看对接文档"
+                >
+                  <CircleHelp className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <p className="mt-1 text-xs leading-6 text-muted-foreground">这里同时控制登录开关与密钥配置。敏感值会写入站点设置的敏感 JSON，仅服务端读取，不向普通前台接口透出。</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <AdminBooleanSelectField label="开启 GitHub 登录" checked={draft.authGithubEnabled} onChange={(value) => updateDraftField("authGithubEnabled", value)} />
+              <AdminBooleanSelectField label="开启 Google 登录" checked={draft.authGoogleEnabled} onChange={(value) => updateDraftField("authGoogleEnabled", value)} />
+              <AdminBooleanSelectField label="开启 Passkey 登录" checked={draft.authPasskeyEnabled} onChange={(value) => updateDraftField("authPasskeyEnabled", value)} />
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <TextField label="GitHub Client ID" value={draft.githubClientId} onChange={(value) => updateDraftField("githubClientId", value)} placeholder="填写 GitHub OAuth App Client ID" />
+              <TextField label="GitHub Client Secret" type="password" value={draft.githubClientSecret} onChange={(value) => updateDraftField("githubClientSecret", value)} placeholder="填写 GitHub OAuth App Client Secret" />
+              <div className="hidden xl:block" />
+              <TextField label="Google Client ID" value={draft.googleClientId} onChange={(value) => updateDraftField("googleClientId", value)} placeholder="填写 Google OAuth Client ID" />
+              <TextField label="Google Client Secret" type="password" value={draft.googleClientSecret} onChange={(value) => updateDraftField("googleClientSecret", value)} placeholder="填写 Google OAuth Client Secret" />
+              <div className="hidden xl:block" />
+              <TextField label="Passkey RP ID" value={draft.passkeyRpId} onChange={(value) => updateDraftField("passkeyRpId", value)} placeholder="如 forum.example.com" />
+              <TextField label="Passkey RP Name" value={draft.passkeyRpName} onChange={(value) => updateDraftField("passkeyRpName", value)} placeholder="如 兴趣论坛" />
+              <TextField label="Passkey Origin" value={draft.passkeyOrigin} onChange={(value) => updateDraftField("passkeyOrigin", value)} placeholder="如 https://forum.example.com" />
+            </div>
+            <p className="text-xs leading-6 text-muted-foreground">开启对应登录方式前，请先在这里填写完整凭据；未填写时，运行时会直接报错，不再回退读取环境变量。</p>
+          </div>
+
+          <Modal
+            open={authDocOpen}
+            onClose={() => setAuthDocOpen(false)}
+            title="第三方与 Passkey 对接文档"
+            description="按当前站点域名生成对接信息。把回调地址填到第三方平台，把密钥与 Passkey 参数填回本页的后台表单即可。"
+            size="xl"
+          >
+            <div className="space-y-5 overflow-y-auto p-6 text-sm text-foreground">
+              <section className="space-y-3">
+                <h4 className="text-sm font-semibold">GitHub OAuth</h4>
+                <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-2">
+                  <p><span className="font-medium">Homepage URL：</span><code>{siteOrigin}</code></p>
+                  <p><span className="font-medium">Authorization callback URL：</span><code>{siteOrigin}/api/auth/oauth/github/callback</code></p>
+                  <p><span className="font-medium">发起登录：</span><code>{siteOrigin}/api/auth/oauth/github/start?mode=login</code></p>
+                  <p><span className="font-medium">发起注册：</span><code>{siteOrigin}/api/auth/oauth/github/start?mode=register</code></p>
+                  <p><span className="font-medium">Scope：</span><code>read:user user:email</code></p>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h4 className="text-sm font-semibold">Google OAuth</h4>
+                <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-2">
+                  <p><span className="font-medium">Authorized JavaScript origins：</span><code>{siteOrigin}</code></p>
+                  <p><span className="font-medium">Authorized redirect URIs：</span><code>{siteOrigin}/api/auth/oauth/google/callback</code></p>
+                  <p><span className="font-medium">发起登录：</span><code>{siteOrigin}/api/auth/oauth/google/start?mode=login</code></p>
+                  <p><span className="font-medium">发起注册：</span><code>{siteOrigin}/api/auth/oauth/google/start?mode=register</code></p>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h4 className="text-sm font-semibold">Passkey</h4>
+                <div className="rounded-xl border border-border bg-secondary/30 p-4 space-y-2">
+                  <p><span className="font-medium">Passkey 登录页：</span><code>{siteOrigin}/auth/passkey?mode=login</code></p>
+                  <p><span className="font-medium">Passkey 注册页：</span><code>{siteOrigin}/auth/passkey?mode=register</code></p>
+                  <p><span className="font-medium">建议 RP ID：</span><code>{resolvedPasskeyRpId}</code></p>
+                  <p><span className="font-medium">建议 RP Name：</span><code>{resolvedPasskeyRpName}</code></p>
+                  <p><span className="font-medium">建议 Origin：</span><code>{resolvedPasskeyOrigin}</code></p>
+                  <p className="text-xs leading-6 text-muted-foreground">RP ID 一般填当前主域名，不带协议与路径。若你使用子域名部署，请确保 RP ID 与实际站点域名匹配。</p>
+                </div>
+              </section>
+
+              <section className="space-y-3">
+                <h4 className="text-sm font-semibold">后台填写项</h4>
+                <div className="rounded-xl border border-border bg-background p-4">
+                  <pre className="overflow-x-auto text-xs leading-6 text-foreground"><code>{`GitHub Client ID = ${draft.githubClientId || "第三方平台生成后填写"}
+GitHub Client Secret = ${draft.githubClientSecret ? "已填写" : "第三方平台生成后填写"}
+
+Google Client ID = ${draft.googleClientId || "第三方平台生成后填写"}
+Google Client Secret = ${draft.googleClientSecret ? "已填写" : "第三方平台生成后填写"}
+
+Passkey RP ID = ${resolvedPasskeyRpId}
+Passkey RP Name = ${resolvedPasskeyRpName}
+Passkey Origin = ${resolvedPasskeyOrigin}`}</code></pre>
+                </div>
+                <p className="text-xs leading-6 text-muted-foreground">以上内容保存在数据库敏感配置中。第三方登录流程本身仍需服务端可用的签名密钥，例如现有的 `AUTH_FLOW_SECRET`。</p>
+              </section>
+            </div>
+          </Modal>
+        </>
+      ) : null}
+
+      {activeSubTab === "sms" ? (
+        <div className="rounded-xl border border-border p-5 space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold">短信发送配置</h3>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">配置宿主内置短信发送器，用于手机注册、短信登录、手机绑定和手机找回密码。插件注册 `sms` provider 后仍会优先接管发送；发送前校验用于降低短信轰炸风险。</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <AdminBooleanSelectField label="启用内置短信" checked={draft.smsEnabled} onChange={(value) => updateDraftField("smsEnabled", value)} />
+            <SettingsSelectField
+              label="内置短信服务商"
+              value={draft.smsProvider}
+              onChange={(value) => updateDraftField("smsProvider", value === "tencent" ? "tencent" : "aliyun")}
+              options={[
+                { value: "aliyun", label: "阿里云短信" },
+                { value: "tencent", label: "腾讯云短信" },
+              ]}
+            />
+            <CaptchaModeField label="短信发送前校验" value={draft.smsCaptchaMode} onChange={(value) => updateDraftField("smsCaptchaMode", value)} />
+          </div>
+          {draft.smsProvider === "tencent" ? (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <TextField label="SecretId" value={draft.smsTencentSecretId} onChange={(value) => updateDraftField("smsTencentSecretId", value)} placeholder="填写腾讯云 SecretId" />
+              <TextField label="SecretKey" type="password" value={draft.smsTencentSecretKey} onChange={(value) => updateDraftField("smsTencentSecretKey", value)} placeholder="填写腾讯云 SecretKey" />
+              <TextField label="Region" value={draft.smsTencentRegion} onChange={(value) => updateDraftField("smsTencentRegion", value)} placeholder="ap-guangzhou" />
+              <TextField label="Endpoint" value={draft.smsTencentEndpoint} onChange={(value) => updateDraftField("smsTencentEndpoint", value)} placeholder="sms.tencentcloudapi.com" />
+              <TextField label="短信 SDK AppID" value={draft.smsTencentSmsSdkAppId} onChange={(value) => updateDraftField("smsTencentSmsSdkAppId", value)} placeholder="如 1400000000" />
+              <TextField label="短信签名" value={draft.smsTencentSignName} onChange={(value) => updateDraftField("smsTencentSignName", value)} placeholder="填写已审核通过的短信签名" />
+              <TextField label="验证码模板 ID" value={draft.smsTencentTemplateId} onChange={(value) => updateDraftField("smsTencentTemplateId", value)} placeholder="如 123456" />
+              <TextField label="模板参数顺序" value={draft.smsTencentTemplateParamKeys} onChange={(value) => updateDraftField("smsTencentTemplateParamKeys", value)} placeholder="code" />
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <TextField label="AccessKey ID" value={draft.smsAliyunAccessKeyId} onChange={(value) => updateDraftField("smsAliyunAccessKeyId", value)} placeholder="填写阿里云 AccessKey ID" />
+            <TextField label="AccessKey Secret" type="password" value={draft.smsAliyunAccessKeySecret} onChange={(value) => updateDraftField("smsAliyunAccessKeySecret", value)} placeholder="填写阿里云 AccessKey Secret" />
+            <TextField label="Endpoint" value={draft.smsAliyunEndpoint} onChange={(value) => updateDraftField("smsAliyunEndpoint", value)} placeholder="dysmsapi.aliyuncs.com" />
+            <TextField label="Region ID" value={draft.smsAliyunRegionId} onChange={(value) => updateDraftField("smsAliyunRegionId", value)} placeholder="cn-hangzhou" />
+            <TextField label="短信签名" value={draft.smsAliyunSignName} onChange={(value) => updateDraftField("smsAliyunSignName", value)} placeholder="填写已审核通过的短信签名" />
+            <TextField label="验证码模板 Code" value={draft.smsAliyunTemplateCode} onChange={(value) => updateDraftField("smsAliyunTemplateCode", value)} placeholder="如 SMS_123456789" />
+            <TextField label="验证码变量名" value={draft.smsAliyunCodeParamName} onChange={(value) => updateDraftField("smsAliyunCodeParamName", value)} placeholder="code" />
+            </div>
+          )}
+          {draft.smsProvider === "tencent" ? (
+            <p className="text-xs leading-6 text-muted-foreground">腾讯云验证码模板变量按顺序传入，默认只传 `code`，对应模板里的 <code>{"{1}"}</code>。如模板有多个变量，用英文逗号分隔变量 key，例如 <code>code,minutes</code>。Secret 会写入站点敏感配置，仅服务端读取。</p>
+          ) : (
+            <p className="text-xs leading-6 text-muted-foreground">阿里云验证码模板中需要有一个变量，默认变量名为 `code`；如果模板使用 <code>{'${verifyCode}'}</code> 之类的变量名，请在这里改成对应名称。AccessKey 会写入站点敏感配置，仅服务端读取。</p>
+          )}
+        </div>
+      ) : null}
+
+      {activeSubTab === "smtp" ? (
+        <div className="rounded-xl border border-border p-5 space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold">SMTP 邮件发送</h3>
+            <p className="mt-1 text-xs leading-6 text-muted-foreground">开启后，邮箱验证码会通过真实邮件发送。</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <AdminBooleanSelectField label="启用 SMTP" checked={draft.smtpEnabled} onChange={(value) => updateDraftField("smtpEnabled", value)} />
+            <AdminBooleanSelectField label="启用 SSL/TLS" checked={draft.smtpSecure} onChange={(value) => updateDraftField("smtpSecure", value)} />
+            <TextField label="SMTP 主机" value={draft.smtpHost} onChange={(value) => updateDraftField("smtpHost", value)} placeholder="如 smtp.qq.com" />
+            <TextField label="SMTP 端口" value={draft.smtpPort} onChange={(value) => updateDraftField("smtpPort", value)} placeholder="如 465 / 587" />
+            <TextField label="SMTP 账号" value={draft.smtpUser} onChange={(value) => updateDraftField("smtpUser", value)} placeholder="邮箱账号" />
+            <TextField label="SMTP 密码 / 授权码" type="password" value={draft.smtpPass} onChange={(value) => updateDraftField("smtpPass", value)} placeholder="请输入密码或授权码" />
+            <TextField label="发件人地址" value={draft.smtpFrom} onChange={(value) => updateDraftField("smtpFrom", value)} placeholder="如 Forum <no-reply@example.com>" />
+          </div>
+          <div className="rounded-xl border border-border bg-secondary/20 p-4">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+              <TextField label="测试收件邮箱" value={smtpTestRecipient} onChange={setSmtpTestRecipient} placeholder="输入你要接收测试邮件的邮箱" />
+              <Button type="button" variant="outline" disabled={isSendingSmtpTest} onClick={handleSendSmtpTest}>
+                {isSendingSmtpTest ? "发送中..." : "发送测试邮件"}
+              </Button>
+            </div>
+            <p className="mt-3 text-xs leading-6 text-muted-foreground">直接使用当前表单里的 SMTP 配置发送测试邮件，不需要先保存设置。</p>
+          </div>
+        </div>
+      ) : null}
+    </>
+  )
+}

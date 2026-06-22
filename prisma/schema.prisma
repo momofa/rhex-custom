@@ -1,0 +1,2984 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  MUTED
+  BANNED
+  INACTIVE
+}
+
+enum BoardStatus {
+  ACTIVE
+  HIDDEN
+  DISABLED
+}
+
+enum PostStatus {
+  NORMAL
+  PENDING
+  LOCKED
+  OFFLINE
+}
+
+enum PostType {
+  NORMAL
+  BOUNTY
+  POLL
+  LOTTERY
+  AUCTION
+}
+
+enum PostAuctionMode {
+  SEALED_BID
+  OPEN_ASCENDING
+}
+
+enum PostAuctionStatus {
+  DRAFT
+  ACTIVE
+  SETTLING
+  SETTLED
+  CANCELLED
+  FAILED
+}
+
+enum PostAuctionPricingRule {
+  FIRST_PRICE
+  SECOND_PRICE
+}
+
+enum PostAuctionEntryStatus {
+  ACTIVE
+  OUTBID
+  LOST
+  WON
+  CANCELLED
+  REFUNDED
+}
+
+enum LotteryTriggerMode {
+  MANUAL
+  AUTO_PARTICIPANT_COUNT
+}
+
+enum LotteryConditionType {
+  REPLY_CONTENT_LENGTH
+  REPLY_KEYWORD
+  LIKE_POST
+  FAVORITE_POST
+  REGISTER_DAYS
+  USER_LEVEL
+  VIP_LEVEL
+  USER_POINTS
+}
+
+enum LotteryConditionOperator {
+  GTE
+  EQ
+}
+
+enum LotteryPrizeType {
+  MANUAL
+  POINTS
+  VIP
+  REDEEM_CODE
+}
+
+enum LotteryVipPlan {
+  MONTH
+  QUARTER
+  YEAR
+}
+
+enum PostRedPacketGrantMode {
+  FIXED
+  RANDOM
+}
+
+enum PostRedPacketClaimOrderMode {
+  FIRST_COME_FIRST_SERVED
+  RANDOM
+}
+
+enum PostRedPacketTriggerType {
+  REPLY
+  LIKE
+  FAVORITE
+}
+
+enum PostRedPacketStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum LotteryStatus {
+  DRAFT
+  ACTIVE
+  LOCKED
+  DRAWN
+  CANCELLED
+}
+
+enum CommentStatus {
+  NORMAL
+  HIDDEN
+  PENDING
+}
+
+enum NotificationType {
+  REPLY_POST
+  REPLY_COMMENT
+  LIKE
+  MENTION
+  FOLLOWED_YOU
+  FOLLOWING_ACTIVITY
+  SYSTEM
+  REPORT_RESULT
+}
+
+enum RelatedType {
+  POST
+  COMMENT
+  USER
+  REPORT
+  ANNOUNCEMENT
+  YINYANG_CHALLENGE
+}
+
+enum TargetType {
+  POST
+  COMMENT
+  USER
+}
+
+enum ReportStatus {
+  PENDING
+  PROCESSING
+  RESOLVED
+  REJECTED
+}
+
+enum ChangeType {
+  INCREASE
+  DECREASE
+}
+
+enum PointEffectTargetType {
+  POINTS
+  PROBABILITY
+  FUNCTION
+}
+
+enum PointEffectRuleKind {
+  FIXED
+  PERCENTAGE
+  RANDOM_FIXED
+  RANDOM_PERCENTAGE
+  RANDOM_SIGNED_MULTIPLIER
+}
+
+enum PointEffectDirection {
+  BUFF
+  NERF
+  RANDOM_SIGNED
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  OFFLINE
+}
+
+enum TaskCategory {
+  NEWBIE
+  DAILY
+  CHALLENGE
+}
+
+enum TaskCycleType {
+  PERMANENT
+  DAILY
+  WEEKLY
+}
+
+enum TaskConditionType {
+  CHECK_IN_COUNT
+  APPROVED_POST_COUNT
+  APPROVED_COMMENT_COUNT
+  GIVEN_LIKE_COUNT
+  RECEIVED_LIKE_COUNT
+  APPROVED_COMMENT_DISTINCT_POST_COUNT
+  FAVORITE_POST_COUNT
+  FOLLOW_BOARD_COUNT
+  FOLLOW_USER_COUNT
+  FOLLOW_TAG_COUNT
+  FOLLOW_POST_COUNT
+}
+
+enum TaskDefinitionStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum TaskRewardTier {
+  NORMAL
+  VIP1
+  VIP2
+  VIP3
+}
+
+enum UserTaskProgressStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum SiteDocumentType {
+  ANNOUNCEMENT
+  HELP
+}
+
+enum SiteDocumentSourceType {
+  DOCUMENT
+  LINK
+}
+
+enum FriendLinkStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DISABLED
+}
+
+enum BoardApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum BadgeRuleType {
+  REGISTER_DAYS
+  REGISTER_TIME_RANGE
+  POST_COUNT
+  COMMENT_COUNT
+  RECEIVED_LIKE_COUNT
+  GOD_COMMENT_COUNT
+  INVITE_COUNT
+  ACCEPTED_ANSWER_COUNT
+  SENT_TIP_COUNT
+  RECEIVED_TIP_COUNT
+  FOLLOWER_COUNT
+  USER_ID
+  LEVEL
+  CHECK_IN_DAYS
+  CURRENT_CHECK_IN_STREAK
+  MAX_CHECK_IN_STREAK
+  VIP_LEVEL
+  VERIFICATION_TYPE
+}
+
+enum BadgeRuleOperator {
+  GT
+  GTE
+  EQ
+  LT
+  LTE
+  BETWEEN
+  BEFORE
+  AFTER
+}
+
+enum BadgeGrantSource {
+  SELF_CLAIM
+  ADMIN_GRANT
+}
+
+enum GodCommentSource {
+  AUTO_LIKE
+  ADMIN
+}
+
+enum VerificationChannel {
+  EMAIL
+  PHONE
+}
+
+enum UserVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum GobangMatchStatus {
+  ONGOING
+  FINISHED
+}
+
+enum SelfServeAdSlotType {
+  IMAGE
+  TEXT
+}
+
+enum SelfServeAdOrderStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  CANCELLED
+}
+
+enum YinYangChallengeStatus {
+  OPEN
+  LOCKED
+  SETTLED
+  CANCELLED
+}
+
+enum YinYangOption {
+  A
+  B
+}
+
+enum RssTriggerType {
+  MANUAL
+  SCHEDULED
+  RETRY
+}
+
+enum RssLogLevel {
+  INFO
+  WARN
+  ERROR
+}
+
+enum RssEntryReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RssSourceApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum FavoriteCollectionVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum FavoriteCollectionSubmissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AiReplyTaskStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum AiReplyTaskSourceType {
+  POST
+  COMMENT
+}
+
+enum AutoCategorizeTaskSourceType {
+  PREVIEW
+  POST_CREATE
+}
+
+enum AiModerationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUPERSEDED
+}
+
+enum PaymentOrderStatus {
+  PENDING
+  WAIT_BUYER_PAY
+  PAID
+  CLOSED
+  FAILED
+  REFUNDING
+  REFUNDED
+}
+
+enum PaymentAttemptStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum PaymentRefundStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CLOSED
+}
+
+enum PaymentFulfillmentStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+enum PaymentApplicationStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  DISABLED
+}
+
+enum PaymentTransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum AddonRegistryState {
+  ENABLED
+  DISABLED
+  UNINSTALLED
+  ERROR
+}
+
+enum OAuthClientStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DISABLED
+}
+
+model User {
+  id                               Int                            @id @default(autoincrement())
+  username                         String                         @unique
+  email                            String?                        @unique
+  phone                            String?                        @unique
+  emailVerifiedAt                  DateTime?                      @db.Timestamptz(3)
+  phoneVerifiedAt                  DateTime?                      @db.Timestamptz(3)
+  passwordHash                     String
+  nickname                         String?                        @unique
+  avatarPath                       String?
+  bio                              String?
+  signature                        String?
+  gender                           String?
+  role                             UserRole                       @default(USER)
+  status                           UserStatus                     @default(ACTIVE)
+  statusExpiresAt                  DateTime?                      @db.Timestamptz(3)
+  statusReason                     String?
+  points                           Int                            @default(0)
+  level                            Int                            @default(1)
+  vipLevel                         Int                            @default(0)
+  vipExpiresAt                     DateTime?                      @db.Timestamptz(3)
+  postCount                        Int                            @default(0)
+  commentCount                     Int                            @default(0)
+  likeReceivedCount                Int                            @default(0)
+  godCommentCount                  Int                            @default(0)
+  inviteCount                      Int                            @default(0)
+  acceptedAnswerCount              Int                            @default(0)
+  inviterId                        Int?
+  lastPostAt                       DateTime?                      @db.Timestamptz(3)
+  lastCommentAt                    DateTime?                      @db.Timestamptz(3)
+  lastLoginAt                      DateTime?                      @db.Timestamptz(3)
+  lastLoginIp                      String?
+  sessionInvalidBefore             DateTime?                      @db.Timestamptz(3)
+  createdAt                        DateTime                       @default(now()) @db.Timestamptz(3)
+  updatedAt                        DateTime                       @updatedAt @db.Timestamptz(3)
+  inviter                          User?                          @relation("UserInvites", fields: [inviterId], references: [id], onDelete: SetNull)
+  invitedUsers                     User[]                         @relation("UserInvites")
+  posts                            Post[]
+  comments                         Comment[]                      @relation("commentAuthor")
+  repliesReceived                  Comment[]                      @relation("replyToUser")
+  privateCommentsReceived          Comment[]                      @relation("privateCommentRecipient")
+  lotteryParticipations            LotteryParticipant[]
+  lotteryWins                      LotteryWinner[]
+  notifications                    Notification[]                 @relation("notificationUser")
+  sentNotifications                Notification[]                 @relation("notificationSender")
+  boardFollows                     BoardFollow[]
+  followingUsers                   UserFollow[]                   @relation("UserFollowSource")
+  followedByUsers                  UserFollow[]                   @relation("UserFollowTarget")
+  blocksInitiated                  UserBlock[]                    @relation("UserBlockSource")
+  blocksReceived                   UserBlock[]                    @relation("UserBlockTarget")
+  tagFollows                       TagFollow[]
+  postFollows                      PostFollow[]
+  favorites                        Favorite[]
+  ownedFavoriteCollections         FavoriteCollection[]           @relation("FavoriteCollectionOwner")
+  favoriteCollectionItems          FavoriteCollectionItem[]       @relation("FavoriteCollectionItemAdder")
+  submittedFavoriteCollectionPosts FavoriteCollectionSubmission[] @relation("FavoriteCollectionSubmissionUser")
+  reviewedFavoriteCollectionPosts  FavoriteCollectionSubmission[] @relation("FavoriteCollectionSubmissionReviewer")
+  likes                            Like[]
+  reports                          Report[]                       @relation("reporter")
+  handledReports                   Report[]                       @relation("handler")
+  pointLogs                        PointLog[]
+  postBlockPurchases               PostBlockPurchase[]            @relation("PostBlockPurchaseBuyer")
+  postBlockSales                   PostBlockPurchase[]            @relation("PostBlockPurchaseSeller")
+  postAttachmentPurchases          PostAttachmentPurchase[]       @relation("PostAttachmentPurchaseBuyer")
+  postAttachmentSales              PostAttachmentPurchase[]       @relation("PostAttachmentPurchaseSeller")
+  vipOrders                        VipOrder[]
+  postTipsSent                     PostTip[]                      @relation("PostTipSender")
+  postTipsReceived                 PostTip[]                      @relation("PostTipReceiver")
+  postGiftEventsSent               PostGiftEvent[]                @relation("PostGiftSender")
+  postGiftEventsReceived           PostGiftEvent[]                @relation("PostGiftReceiver")
+  postGiftStatsReceived            PostGiftStats[]                @relation("PostGiftStatsReceiver")
+  postAuctionsSelling              PostAuction[]                  @relation("PostAuctionSeller")
+  postAuctionsWon                  PostAuction[]                  @relation("PostAuctionWinner")
+  postAuctionEntries               PostAuctionEntry[]
+  postAuctionBidRecords            PostAuctionBidRecord[]
+  redPacketsSent                   PostRedPacket[]
+  redPacketClaims                  PostRedPacketClaim[]           @relation("PostRedPacketClaimUser")
+  commentEffectFeedbacks           CommentEffectFeedback[]
+  checkInLogs                      UserCheckInLog[]
+  pollVotes                        PollVote[]
+  uploads                          Upload[]
+  authAccounts                     AuthAccount[]
+  authPasskeys                     AuthPasskey[]
+  oauthClients                     OAuthClient[]                 @relation("OAuthClientOwner")
+  reviewedOAuthClients             OAuthClient[]                 @relation("OAuthClientReviewer")
+  paymentApplications              PaymentApplication[]          @relation("PaymentApplicationOwner")
+  reviewedPaymentApplications      PaymentApplication[]          @relation("PaymentApplicationReviewer")
+  paidPaymentTransactions           PaymentTransaction[]          @relation("PaymentTransactionPayer")
+  oauthAuthorizationCodes          OAuthAuthorizationCode[]
+  oauthAccessTokens                OAuthAccessToken[]
+  oauthRefreshTokens               OAuthRefreshToken[]
+  oauthConsents                    OAuthConsent[]
+  userBadges                       UserBadge[]
+  adminLogs                        AdminLog[]
+  announcements                    Announcement[]                 @relation("announcementCreator")
+  customPages                      CustomPage[]                   @relation("customPageCreator")
+  attachmentReferenceScanJobs      UploadReferenceScanJob[]       @relation("UploadReferenceScanJobAdmin")
+  loginLogs                        UserLoginLog[]
+  messageParticipants              ConversationParticipant[]
+  sentDirectMessages               DirectMessage[]
+  levelProgress                    UserLevelProgress?
+  generatedInviteCodes             InviteCode[]                   @relation("InviteCodeCreator")
+  usedInviteCodes                  InviteCode[]                   @relation("InviteCodeConsumer")
+  generatedRedeemCodes             RedeemCode[]                   @relation("RedeemCodeCreator")
+  redeemedCodes                    RedeemCode[]                   @relation("RedeemCodeConsumer")
+  verificationApplications         UserVerification[]             @relation("userVerificationApplicant")
+  reviewedVerifications            UserVerification[]             @relation("userVerificationReviewer")
+  reviewedComments                 Comment[]                      @relation("commentReviewer")
+  godCommentedComments             Comment[]                      @relation("commentGodCommentMarker")
+  rssReviewedEntries               RssEntry[]                     @relation("rssEntryReviewer")
+  rssEntryLikes                    RssEntryLike[]
+  rssEntryTips                     RssEntryTip[]                  @relation("RssEntryTipSender")
+  rssSourceApplications            RssSourceApplication[]         @relation("rssSourceApplicationApplicant")
+  rssSourceApplicationsReviewed    RssSourceApplication[]         @relation("rssSourceApplicationReviewer")
+  yinYangChallengesCreated         YinYangChallenge[]             @relation("YinYangChallengeCreator")
+  yinYangChallengesJoined          YinYangChallenge[]             @relation("YinYangChallengeChallenger")
+  yinYangChallengeAttempts         YinYangChallengeAttempt[]
+  yinYangChallengeDailyStats       YinYangChallengeDailyStat[]
+  moderatedZoneScopes              ModeratorZoneScope[]
+  moderatedBoardScopes             ModeratorBoardScope[]
+  adminPermissionGrants            AdminPermissionGrant[]
+  boardApplications                BoardApplication[]             @relation("boardApplicationApplicant")
+  reviewedBoardApplications        BoardApplication[]             @relation("boardApplicationReviewer")
+  aiReplyTasksTriggered            AiReplyTask[]                  @relation("AiReplyTaskTriggerUser")
+  aiReplyTasksAssigned             AiReplyTask[]                  @relation("AiReplyTaskAgentUser")
+  autoCategorizeTasksRequested     AutoCategorizeTask[]           @relation("AutoCategorizeTaskRequesterUser")
+  paymentOrders                    PaymentOrder[]
+  aiModerationSuggestionsReviewed  AiModerationSuggestion[]
+  createdTaskDefinitions           TaskDefinition[]               @relation("TaskDefinitionCreator")
+  updatedTaskDefinitions           TaskDefinition[]               @relation("TaskDefinitionUpdater")
+  taskProgresses                   UserTaskProgress[]
+  taskEventLedgers                 UserTaskEventLedger[]
+
+  @@index([role])
+  @@index([status])
+  @@index([status, statusExpiresAt])
+  @@index([createdAt])
+  @@index([inviterId])
+}
+
+model AuthAccount {
+  id                String   @id
+  userId            Int
+  provider          String
+  providerAccountId String
+  providerUsername  String?
+  providerEmail     String?
+  metadataJson      String?
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId, provider])
+}
+
+model AuthPasskey {
+  id                  String    @id
+  userId              Int
+  credentialId        String    @unique
+  credentialPublicKey String
+  counter             BigInt    @default(0)
+  deviceType          String?
+  backedUp            Boolean   @default(false)
+  transports          String?
+  name                String?
+  lastUsedAt          DateTime? @db.Timestamptz(3)
+  createdAt           DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime  @updatedAt @db.Timestamptz(3)
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([lastUsedAt])
+}
+
+model OAuthClient {
+  id               String                 @id @default(cuid())
+  ownerId          Int
+  clientId         String                 @unique
+  clientSecretHash String?
+  name             String
+  description      String?
+  homepageUrl      String?
+  logoUrl          String?
+  redirectUris     String[]
+  scopes           String[]
+  status           OAuthClientStatus      @default(PENDING)
+  reviewNote       String?
+  reviewedById     Int?
+  reviewedAt       DateTime?              @db.Timestamptz(3)
+  secretRotatedAt  DateTime?              @db.Timestamptz(3)
+  createdAt        DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime               @updatedAt @db.Timestamptz(3)
+  owner            User                   @relation("OAuthClientOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  reviewer         User?                  @relation("OAuthClientReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  authorizationCodes OAuthAuthorizationCode[]
+  accessTokens       OAuthAccessToken[]
+  refreshTokens      OAuthRefreshToken[]
+  consents           OAuthConsent[]
+
+  @@index([ownerId, status, createdAt])
+  @@index([status, createdAt])
+  @@index([reviewedById, reviewedAt])
+}
+
+model OAuthAuthorizationCode {
+  id                  String      @id @default(cuid())
+  codeHash            String      @unique
+  clientId            String
+  userId              Int
+  redirectUri         String
+  scopes              String[]
+  codeChallenge       String
+  codeChallengeMethod String
+  nonce               String?
+  state               String?
+  expiresAt           DateTime    @db.Timestamptz(3)
+  consumedAt          DateTime?   @db.Timestamptz(3)
+  createdAt           DateTime    @default(now()) @db.Timestamptz(3)
+  client              OAuthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  user                User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+}
+
+model OAuthAccessToken {
+  id              String      @id @default(cuid())
+  tokenHash       String      @unique
+  clientId        String
+  userId          Int
+  scopes          String[]
+  expiresAt       DateTime    @db.Timestamptz(3)
+  revokedAt       DateTime?   @db.Timestamptz(3)
+  createdAt       DateTime    @default(now()) @db.Timestamptz(3)
+  client          OAuthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokens   OAuthRefreshToken[]
+
+  @@index([clientId, createdAt])
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+model OAuthRefreshToken {
+  id            String            @id @default(cuid())
+  tokenHash     String            @unique
+  accessTokenId String?
+  clientId      String
+  userId        Int
+  scopes        String[]
+  expiresAt     DateTime          @db.Timestamptz(3)
+  revokedAt     DateTime?         @db.Timestamptz(3)
+  createdAt     DateTime          @default(now()) @db.Timestamptz(3)
+  rotatedAt     DateTime?         @db.Timestamptz(3)
+  client        OAuthClient       @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken   OAuthAccessToken? @relation(fields: [accessTokenId], references: [id], onDelete: SetNull)
+
+  @@index([accessTokenId])
+  @@index([clientId, userId])
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+model OAuthConsent {
+  id        String      @id @default(cuid())
+  clientId  String
+  userId    Int
+  scopes    String[]
+  createdAt DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime    @updatedAt @db.Timestamptz(3)
+  client    OAuthClient @relation(fields: [clientId], references: [clientId], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, userId])
+  @@index([userId, updatedAt])
+}
+
+model PaymentApplication {
+  id              String                   @id @default(cuid())
+  ownerId         Int
+  paymentId       String                   @unique
+  secretHash      String
+  name            String
+  description     String?
+  homepageUrl     String?
+  callbackUrl     String
+  status          PaymentApplicationStatus @default(PENDING)
+  reviewNote      String?
+  reviewedById    Int?
+  reviewedAt      DateTime?                @db.Timestamptz(3)
+  secretRotatedAt DateTime?                @db.Timestamptz(3)
+  createdAt       DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                 @updatedAt @db.Timestamptz(3)
+  owner           User                     @relation("PaymentApplicationOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  reviewer        User?                    @relation("PaymentApplicationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  transactions    PaymentTransaction[]
+
+  @@index([ownerId, status, createdAt])
+  @@index([status, createdAt])
+  @@index([reviewedById, reviewedAt])
+}
+
+model PaymentTransaction {
+  id             String                   @id @default(cuid())
+  transactionId  String                   @unique
+  applicationId  String
+  payerId        Int?
+  orderId        String
+  amount         Int
+  platformFee    Int                      @default(0)
+  merchantPoints Int
+  description    String
+  status         PaymentTransactionStatus @default(PENDING)
+  errorMessage   String?
+  paidAt         DateTime?                @db.Timestamptz(3)
+  expiresAt      DateTime                 @db.Timestamptz(3)
+  createdAt      DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime                 @updatedAt @db.Timestamptz(3)
+  application    PaymentApplication       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  payer          User?                    @relation("PaymentTransactionPayer", fields: [payerId], references: [id], onDelete: SetNull)
+
+  @@unique([applicationId, orderId])
+  @@index([applicationId, status, createdAt])
+  @@index([payerId, createdAt])
+  @@index([status, expiresAt])
+}
+
+model UserLevelProgress {
+  id                   String   @id @default(cuid())
+  userId               Int      @unique
+  checkInDays          Int      @default(0)
+  currentCheckInStreak Int      @default(0)
+  maxCheckInStreak     Int      @default(0)
+  lastCheckInDate      String?
+  receivedPostLikes    Int      @default(0)
+  receivedCommentLikes Int      @default(0)
+  receivedLikeCount    Int      @default(0)
+  updatedAt            DateTime @updatedAt @db.Timestamptz(3)
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model GobangMatch {
+  id           String            @id
+  creatorId    Int
+  challengerId Int?
+  status       GobangMatchStatus
+  winnerId     Int?
+  ticketCost   Int
+  winReward    Int
+  createdAt    DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime          @updatedAt @db.Timestamptz(3)
+
+  @@index([creatorId])
+  @@index([challengerId])
+  @@index([status])
+}
+
+model GobangMove {
+  id        String   @id
+  matchId   String
+  playerId  Int
+  step      Int
+  x         Int
+  y         Int
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([matchId, step])
+}
+
+model SelfServeAdOrder {
+  id              String                 @id
+  appCode         String                 @default("self-serve-ads")
+  userId          Int
+  slotType        SelfServeAdSlotType
+  slotIndex       Int
+  title           String?
+  linkUrl         String
+  imageUrl        String?
+  textColor       String?
+  backgroundColor String?
+  durationMonths  Int
+  pricePoints     Int
+  status          SelfServeAdOrderStatus
+  reviewNote      String?
+  startsAt        DateTime?              @db.Timestamptz(3)
+  endsAt          DateTime?              @db.Timestamptz(3)
+  createdAt       DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime               @updatedAt @db.Timestamptz(3)
+
+  @@index([status, slotType, slotIndex])
+  @@index([userId, createdAt])
+  @@map("SelfServeAdOrder")
+}
+
+model YinYangChallenge {
+  id            String                   @id
+  creatorId     Int
+  challengerId  Int?
+  status        YinYangChallengeStatus
+  question      String
+  optionA       String
+  optionB       String
+  correctOption YinYangOption
+  stakePoints   Int
+  rewardPoints  Int
+  taxRateBps    Int
+  taxPoints     Int
+  winnerId      Int?
+  loserId       Int?
+  expiresAt     DateTime?                @db.Timestamptz(3)
+  settledAt     DateTime?                @db.Timestamptz(3)
+  createdAt     DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime                 @updatedAt @db.Timestamptz(3)
+  creator       User                     @relation("YinYangChallengeCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  challenger    User?                    @relation("YinYangChallengeChallenger", fields: [challengerId], references: [id], onDelete: SetNull)
+  attempt       YinYangChallengeAttempt?
+
+  @@index([creatorId, createdAt])
+  @@index([challengerId, updatedAt])
+  @@index([status, createdAt])
+  @@index([winnerId, settledAt])
+  @@index([loserId, settledAt])
+}
+
+model YinYangChallengeAttempt {
+  id             String           @id
+  challengeId    String           @unique
+  challengerId   Int
+  selectedOption YinYangOption
+  isCorrect      Boolean
+  stakePoints    Int
+  rewardPoints   Int
+  taxPoints      Int
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  settledAt      DateTime         @default(now()) @db.Timestamptz(3)
+  challenge      YinYangChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  challenger     User             @relation(fields: [challengerId], references: [id], onDelete: Cascade)
+
+  @@index([challengerId, createdAt])
+}
+
+model YinYangChallengeDailyStat {
+  id                String   @id @default(cuid())
+  userId            Int
+  dateKey           String
+  winCount          Int      @default(0)
+  loseCount         Int      @default(0)
+  todayProfitPoints Int      @default(0)
+  todayLossPoints   Int      @default(0)
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dateKey])
+  @@index([dateKey, todayProfitPoints])
+  @@index([userId, updatedAt])
+}
+
+model LevelDefinition {
+  id                  String   @id @default(cuid())
+  level               Int      @unique
+  name                String
+  color               String   @default("#64748b")
+  icon                String   @default("⭐")
+  requireCheckInDays  Int      @default(0)
+  requirePostCount    Int      @default(0)
+  requireCommentCount Int      @default(0)
+  requireLikeCount    Int      @default(0)
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([level])
+}
+
+model Zone {
+  id                            String               @id @default(cuid())
+  name                          String               @unique
+  slug                          String               @unique
+  description                   String?
+  icon                          String?
+  sortOrder                     Int                  @default(0)
+  hiddenFromSidebar             Boolean              @default(false)
+  showInHomeFeed                Boolean              @default(true)
+  allowUserPost                 Boolean              @default(true)
+  allowUserReply                Boolean              @default(true)
+  allowPostAuthorOfflineComment Boolean              @default(false)
+  allowUserOfflineOwnComment    Boolean              @default(false)
+  requirePostReview             Boolean              @default(false)
+  requireCommentReview          Boolean              @default(false)
+  postPointDelta                Int                  @default(0)
+  replyPointDelta               Int                  @default(0)
+  postIntervalSeconds           Int                  @default(120)
+  replyIntervalSeconds          Int                  @default(3)
+  allowedPostTypes              String?              @default("NORMAL,BOUNTY,POLL,LOTTERY,AUCTION")
+  minViewPoints                 Int                  @default(0)
+  minViewLevel                  Int                  @default(0)
+  minPostPoints                 Int                  @default(0)
+  minPostLevel                  Int                  @default(0)
+  minReplyPoints                Int                  @default(0)
+  minReplyLevel                 Int                  @default(0)
+  minViewVipLevel               Int                  @default(0)
+  minPostVipLevel               Int                  @default(0)
+  minReplyVipLevel              Int                  @default(0)
+  postRequiredVerificationTypeIds  String[]           @default([])
+  postRequiredBadgeIds             String[]           @default([])
+  replyRequiredVerificationTypeIds String[]           @default([])
+  replyRequiredBadgeIds            String[]           @default([])
+  postListDisplayMode           String?
+  postListLoadMode              String?
+  createdAt                     DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt                     DateTime             @updatedAt @db.Timestamptz(3)
+  boards                        Board[]
+  moderatorScopes               ModeratorZoneScope[]
+  boardApplications             BoardApplication[]
+
+  @@index([sortOrder])
+}
+
+model Board {
+  id                              String                   @id @default(cuid())
+  zoneId                          String?
+  name                            String                   @unique
+  slug                            String                   @unique
+  description                     String?
+  iconPath                        String?
+  coverPath                       String?
+  configJson                      Json?
+  sortOrder                       Int                      @default(0)
+  status                          BoardStatus              @default(ACTIVE)
+  allowPost                       Boolean                  @default(true)
+  allowUserPost                   Boolean?
+  allowUserReply                  Boolean?
+  allowPostAuthorOfflineComment   Boolean?
+  allowUserOfflineOwnComment      Boolean?
+  showInHomeFeed                  Boolean?
+  requirePostReview               Boolean?
+  requireCommentReview            Boolean?
+  postPointDelta                  Int?
+  replyPointDelta                 Int?
+  postIntervalSeconds             Int?
+  replyIntervalSeconds            Int?
+  allowedPostTypes                String?
+  minViewPoints                   Int?
+  minViewLevel                    Int?
+  minPostPoints                   Int?
+  minPostLevel                    Int?
+  minReplyPoints                  Int?
+  minReplyLevel                   Int?
+  minViewVipLevel                 Int?
+  minPostVipLevel                 Int?
+  minReplyVipLevel                Int?
+  postIdentityGateInherit          Boolean                  @default(true)
+  replyIdentityGateInherit         Boolean                  @default(true)
+  postRequiredVerificationTypeIds  String[]                 @default([])
+  postRequiredBadgeIds             String[]                 @default([])
+  replyRequiredVerificationTypeIds String[]                 @default([])
+  replyRequiredBadgeIds            String[]                 @default([])
+  postListDisplayMode             String?
+  postListLoadMode                String?
+  postCount                       Int                      @default(0)
+  treasuryPoints                  Int                      @default(0)
+  followerCount                   Int                      @default(0)
+  createdAt                       DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt                       DateTime                 @updatedAt @db.Timestamptz(3)
+  zone                            Zone?                    @relation(fields: [zoneId], references: [id])
+  posts                           Post[]
+  followers                       BoardFollow[]
+  moderatorScopes                 ModeratorBoardScope[]
+  boardApplications               BoardApplication[]
+  aiModerationSuggestionsAsTarget AiModerationSuggestion[]
+  autoCategorizeTasksAsResult     AutoCategorizeTask[]     @relation("AutoCategorizeTaskResultBoard")
+
+  @@index([zoneId])
+  @@index([status])
+  @@index([sortOrder])
+}
+
+model ModeratorZoneScope {
+  id                  String   @id @default(cuid())
+  moderatorId         Int
+  zoneId              String
+  canEditSettings     Boolean  @default(false)
+  canWithdrawTreasury Boolean  @default(true)
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+  moderator           User     @relation(fields: [moderatorId], references: [id], onDelete: Cascade)
+  zone                Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@unique([moderatorId, zoneId])
+  @@index([zoneId])
+  @@index([moderatorId, createdAt])
+}
+
+model ModeratorBoardScope {
+  id                  String   @id @default(cuid())
+  moderatorId         Int
+  boardId             String
+  canEditSettings     Boolean  @default(false)
+  canWithdrawTreasury Boolean  @default(true)
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime @updatedAt @db.Timestamptz(3)
+  moderator           User     @relation(fields: [moderatorId], references: [id], onDelete: Cascade)
+  board               Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@unique([moderatorId, boardId])
+  @@index([boardId])
+  @@index([moderatorId, createdAt])
+}
+
+model AdminPermissionGrant {
+  id            String   @id @default(cuid())
+  userId        Int
+  permissionKey String
+  allowed       Boolean  @default(true)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionKey])
+  @@index([userId])
+  @@index([permissionKey])
+}
+
+model BoardFollow {
+  id        String   @id @default(cuid())
+  userId    Int
+  boardId   String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, boardId])
+  @@index([userId, createdAt])
+  @@index([boardId, createdAt])
+}
+
+model UserFollow {
+  id          String   @id @default(cuid())
+  followerId  Int
+  followingId Int
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  follower    User     @relation("UserFollowSource", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("UserFollowTarget", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId, createdAt])
+  @@index([followingId, createdAt])
+}
+
+model UserBlock {
+  id        String   @id @default(cuid())
+  blockerId Int
+  blockedId Int
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  blocker   User     @relation("UserBlockSource", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("UserBlockTarget", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId, createdAt])
+  @@index([blockedId, createdAt])
+}
+
+enum PinScope {
+  NONE
+  GLOBAL
+  ZONE
+  BOARD
+}
+
+enum PostAttachmentSourceType {
+  UPLOAD
+  EXTERNAL_LINK
+}
+
+model Post {
+  id                            String                         @id @default(cuid())
+  boardId                       String
+  authorId                      Int
+  title                         String
+  slug                          String                         @unique
+  summary                       String?
+  content                       String
+  coverPath                     String?
+  type                          PostType                       @default(NORMAL)
+  status                        PostStatus                     @default(NORMAL)
+  reviewNote                    String?
+  isAnonymous                   Boolean                        @default(false)
+  isPinned                      Boolean                        @default(false)
+  pinScope                      PinScope                       @default(NONE)
+  isFeatured                    Boolean                        @default(false)
+  isAnnouncement                Boolean                        @default(false)
+  commentsVisibleToAuthorOnly   Boolean                        @default(false)
+  minViewLevel                  Int                            @default(0)
+  minViewVipLevel               Int                            @default(0)
+  viewCount                     Int                            @default(0)
+  commentCount                  Int                            @default(0)
+  likeCount                     Int                            @default(0)
+  favoriteCount                 Int                            @default(0)
+  score                         Float                          @default(0)
+  tipCount                      Int                            @default(0)
+  tipTotalPoints                Int                            @default(0)
+  bountyPoints                  Int?
+  bountyAwardedAt               DateTime?                      @db.Timestamptz(3)
+  acceptedCommentId             String?                        @unique
+  pollExpiresAt                 DateTime?                      @db.Timestamptz(3)
+  lotteryStatus                 LotteryStatus?
+  lotteryTriggerMode            LotteryTriggerMode?
+  lotteryStartsAt               DateTime?                      @db.Timestamptz(3)
+  lotteryEndsAt                 DateTime?                      @db.Timestamptz(3)
+  lotteryParticipantGoal        Int?
+  lotteryLockedAt               DateTime?                      @db.Timestamptz(3)
+  lotteryDrawnAt                DateTime?                      @db.Timestamptz(3)
+  lotteryAnnouncement           String?
+  editableUntil                 DateTime?                      @db.Timestamptz(3)
+  appendedContent               String?
+  lastAppendedAt                DateTime?                      @db.Timestamptz(3)
+  lastCommentedAt               DateTime?                      @db.Timestamptz(3)
+  activityAt                    DateTime                       @default(now()) @db.Timestamptz(3)
+  publishedAt                   DateTime?                      @db.Timestamptz(3)
+  createdAt                     DateTime                       @default(now()) @db.Timestamptz(3)
+  updatedAt                     DateTime                       @updatedAt @db.Timestamptz(3)
+  board                         Board                          @relation(fields: [boardId], references: [id])
+  author                        User                           @relation(fields: [authorId], references: [id])
+  acceptedComment               Comment?                       @relation("AcceptedBountyComment", fields: [acceptedCommentId], references: [id])
+  comments                      Comment[]
+  favorites                     Favorite[]
+  favoriteCollectionItems       FavoriteCollectionItem[]
+  favoriteCollectionSubmissions FavoriteCollectionSubmission[]
+  likes                         Like[]
+  tags                          PostTag[]
+  pollOptions                   PollOption[]
+  pollVotes                     PollVote[]
+  lotteryPrizes                 LotteryPrize[]
+  lotteryConditions             LotteryCondition[]
+  lotteryParticipants           LotteryParticipant[]
+  lotteryWinners                LotteryWinner[]
+  appendices                    PostAppendix[]
+  tips                          PostTip[]
+  giftEvents                    PostGiftEvent[]
+  giftStats                     PostGiftStats[]
+  auction                       PostAuction?
+  redPacket                     PostRedPacket?
+  redPacketClaims               PostRedPacketClaim[]
+  blockPurchases                PostBlockPurchase[]
+  attachments                   PostAttachment[]
+  attachmentPurchases           PostAttachmentPurchase[]
+  commentEffectFeedbacks        CommentEffectFeedback[]
+  followers                     PostFollow[]
+  aiReplyTasks                  AiReplyTask[]
+  aiModerationSuggestions       AiModerationSuggestion[]
+  autoCategorizeTasks           AutoCategorizeTask[]
+
+  @@index([boardId])
+  @@index([authorId])
+  @@index([status])
+  @@index([type])
+  @@index([score])
+  @@index([pinScope, createdAt])
+  @@index([authorId, status, createdAt])
+  @@index([boardId, status, createdAt])
+  @@index([boardId, status, lastCommentedAt])
+  @@index([boardId, status, activityAt])
+  @@index([status, createdAt])
+  @@index([status, lastCommentedAt])
+  @@index([status, activityAt])
+  @@index([status, score, createdAt])
+  @@index([status, likeCount, commentCount, createdAt])
+}
+
+model PostSlugCounter {
+  id        String   @id
+  nextValue BigInt   @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+}
+
+model Tag {
+  id        String      @id @default(cuid())
+  name      String      @unique
+  slug      String      @unique
+  postCount Int         @default(0)
+  createdAt DateTime    @default(now()) @db.Timestamptz(3)
+  posts     PostTag[]
+  followers TagFollow[]
+
+  @@index([createdAt])
+  @@index([postCount, createdAt])
+}
+
+model TagFollow {
+  id        String   @id @default(cuid())
+  userId    Int
+  tagId     String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tagId])
+  @@index([userId, createdAt])
+  @@index([tagId, createdAt])
+}
+
+model PostFollow {
+  id        String   @id @default(cuid())
+  userId    Int
+  postId    String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([userId, createdAt])
+  @@index([postId, createdAt])
+}
+
+model PostTag {
+  id     String @id @default(cuid())
+  postId String
+  tagId  String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, tagId])
+  @@index([tagId, postId])
+}
+
+model PostAppendix {
+  id        String   @id @default(cuid())
+  postId    String
+  content   String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, sortOrder])
+}
+
+model Comment {
+  id                     String                 @id @default(cuid())
+  postId                 String
+  userId                 Int
+  parentId               String?
+  replyToUserId          Int?
+  replyToCommentId       String?
+  privateRecipientUserId Int?
+  useAnonymousIdentity   Boolean                @default(false)
+  content                String
+  status                 CommentStatus          @default(NORMAL)
+  reviewNote             String?
+  reviewedById           Int?
+  reviewedAt             DateTime?              @db.Timestamptz(3)
+  likeCount              Int                    @default(0)
+  tipCount               Int                    @default(0)
+  tipTotalPoints         Int                    @default(0)
+  isAcceptedAnswer       Boolean                @default(false)
+  isPinnedByAuthor       Boolean                @default(false)
+  isGodComment           Boolean                @default(false)
+  godCommentSource       GodCommentSource?
+  godCommentedById       Int?
+  godCommentedAt         DateTime?              @db.Timestamptz(3)
+  acceptedAt             DateTime?              @db.Timestamptz(3)
+  bountyAcceptedForPost  Post?                  @relation("AcceptedBountyComment")
+  createdAt              DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime               @updatedAt @db.Timestamptz(3)
+  post                   Post                   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user                   User                   @relation("commentAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  parent                 Comment?               @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies                Comment[]              @relation("CommentReplies")
+  replyToUser            User?                  @relation("replyToUser", fields: [replyToUserId], references: [id])
+  replyToComment         Comment?               @relation("CommentReplyTargets", fields: [replyToCommentId], references: [id], onDelete: SetNull)
+  privateRecipient       User?                  @relation("privateCommentRecipient", fields: [privateRecipientUserId], references: [id], onDelete: SetNull)
+  quotedReplies          Comment[]              @relation("CommentReplyTargets")
+  reviewer               User?                  @relation("commentReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  godCommentedBy         User?                  @relation("commentGodCommentMarker", fields: [godCommentedById], references: [id], onDelete: SetNull)
+  likes                  Like[]
+  tips                   PostTip[]
+  giftEvents             PostGiftEvent[]
+  pollVotes              PollVote[]
+  lotteryParticipants    LotteryParticipant[]
+  redPacketClaims        PostRedPacketClaim[]
+  effectFeedback         CommentEffectFeedback?
+  aiReplyTasksAsSource   AiReplyTask[]          @relation("AiReplyTaskSourceComment")
+  aiReplyTaskGenerated   AiReplyTask?           @relation("AiReplyTaskGeneratedComment")
+
+  @@index([postId])
+  @@index([userId])
+  @@index([parentId])
+  @@index([replyToCommentId])
+  @@index([privateRecipientUserId])
+  @@index([postId, status, createdAt])
+  @@index([postId, status, parentId, createdAt])
+  @@index([postId, status, parentId, isGodComment, isPinnedByAuthor, createdAt, id], map: "comment_thread_order_idx")
+  @@index([postId, status, isGodComment, isPinnedByAuthor, createdAt, id], map: "comment_flat_order_idx")
+  @@index([reviewedById, reviewedAt])
+  @@index([godCommentedById, godCommentedAt])
+}
+
+model Like {
+  id         String     @id @default(cuid())
+  userId     Int
+  targetType TargetType
+  targetId   String
+  postId     String?
+  commentId  String?
+  createdAt  DateTime   @default(now()) @db.Timestamptz(3)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post       Post?      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment    Comment?   @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, targetType, targetId])
+  @@index([userId, targetType, createdAt])
+  @@index([targetType, targetId])
+  @@index([postId])
+  @@index([commentId])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    Int
+  postId    String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([userId, createdAt])
+  @@index([postId, createdAt])
+}
+
+model FavoriteCollection {
+  id                          String                         @id @default(cuid())
+  ownerId                     Int
+  title                       String
+  description                 String?
+  visibility                  FavoriteCollectionVisibility   @default(PRIVATE)
+  allowOtherUsersToContribute Boolean                        @default(false)
+  requireContributionApproval Boolean                        @default(false)
+  postCount                   Int                            @default(0)
+  createdAt                   DateTime                       @default(now()) @db.Timestamptz(3)
+  updatedAt                   DateTime                       @updatedAt @db.Timestamptz(3)
+  owner                       User                           @relation("FavoriteCollectionOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  items                       FavoriteCollectionItem[]
+  submissions                 FavoriteCollectionSubmission[]
+
+  @@index([ownerId, createdAt])
+  @@index([visibility, createdAt])
+  @@map("favorite_collection")
+}
+
+model FavoriteCollectionItem {
+  id           String             @id @default(cuid())
+  collectionId String
+  postId       String
+  addedById    Int
+  createdAt    DateTime           @default(now()) @db.Timestamptz(3)
+  collection   FavoriteCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  post         Post               @relation(fields: [postId], references: [id], onDelete: Cascade)
+  addedBy      User               @relation("FavoriteCollectionItemAdder", fields: [addedById], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, postId])
+  @@index([collectionId, createdAt])
+  @@index([postId, createdAt])
+  @@index([addedById, createdAt])
+  @@map("favorite_collection_item")
+}
+
+model FavoriteCollectionSubmission {
+  id            String                             @id @default(cuid())
+  collectionId  String
+  postId        String
+  submittedById Int
+  status        FavoriteCollectionSubmissionStatus @default(PENDING)
+  reviewNote    String?
+  reviewedById  Int?
+  reviewedAt    DateTime?                          @db.Timestamptz(3)
+  createdAt     DateTime                           @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime                           @updatedAt @db.Timestamptz(3)
+  collection    FavoriteCollection                 @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  post          Post                               @relation(fields: [postId], references: [id], onDelete: Cascade)
+  submittedBy   User                               @relation("FavoriteCollectionSubmissionUser", fields: [submittedById], references: [id], onDelete: Cascade)
+  reviewedBy    User?                              @relation("FavoriteCollectionSubmissionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([collectionId, status, createdAt])
+  @@index([postId, status, createdAt])
+  @@index([submittedById, createdAt])
+  @@index([reviewedById, reviewedAt])
+  @@map("favorite_collection_submission")
+}
+
+model PollOption {
+  id        String     @id @default(cuid())
+  postId    String
+  content   String
+  sortOrder Int        @default(0)
+  voteCount Int        @default(0)
+  createdAt DateTime   @default(now()) @db.Timestamptz(3)
+  post      Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  votes     PollVote[]
+
+  @@index([postId])
+}
+
+model PollVote {
+  id        String     @id @default(cuid())
+  postId    String
+  optionId  String
+  userId    Int
+  commentId String?
+  createdAt DateTime   @default(now()) @db.Timestamptz(3)
+  post      Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comment   Comment?   @relation(fields: [commentId], references: [id], onDelete: SetNull)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([optionId])
+  @@index([userId])
+}
+
+model LotteryPrize {
+  id             String           @id @default(cuid())
+  postId         String
+  title          String
+  description    String
+  quantity       Int
+  type           LotteryPrizeType @default(MANUAL)
+  pointsAmount   Int?
+  vipPlan        LotteryVipPlan?
+  codesJson      Json?
+  unitCostPoints Int              @default(0)
+  sortOrder      Int              @default(0)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(3)
+  post           Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
+  winners        LotteryWinner[]
+
+  @@index([postId, sortOrder])
+  @@index([postId, type])
+}
+
+model LotteryCondition {
+  id          String                   @id @default(cuid())
+  postId      String
+  type        LotteryConditionType
+  operator    LotteryConditionOperator @default(GTE)
+  value       String
+  description String?
+  groupKey    String                   @default("default")
+  sortOrder   Int                      @default(0)
+  createdAt   DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime                 @updatedAt @db.Timestamptz(3)
+  post        Post                     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, sortOrder])
+  @@index([postId, groupKey])
+}
+
+model LotteryParticipant {
+  id               String          @id @default(cuid())
+  postId           String
+  userId           Int
+  sourceCommentId  String?
+  joinedAt         DateTime        @default(now()) @db.Timestamptz(3)
+  lockedAt         DateTime?       @db.Timestamptz(3)
+  lockVersion      Int             @default(0)
+  isEligible       Boolean         @default(true)
+  ineligibleReason String?
+  createdAt        DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime        @updatedAt @db.Timestamptz(3)
+  post             Post            @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sourceComment    Comment?        @relation(fields: [sourceCommentId], references: [id], onDelete: SetNull)
+  winnings         LotteryWinner[]
+
+  @@unique([postId, userId])
+  @@index([postId, joinedAt])
+  @@index([postId, isEligible])
+}
+
+model LotteryWinner {
+  id            String             @id @default(cuid())
+  postId        String
+  prizeId       String
+  participantId String
+  userId        Int
+  redemptionCode String?
+  drawnAt       DateTime           @default(now()) @db.Timestamptz(3)
+  deliveredAt   DateTime?          @db.Timestamptz(3)
+  createdAt     DateTime           @default(now()) @db.Timestamptz(3)
+  post          Post               @relation(fields: [postId], references: [id], onDelete: Cascade)
+  prize         LotteryPrize       @relation(fields: [prizeId], references: [id], onDelete: Cascade)
+  participant   LotteryParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, prizeId, participantId])
+  @@unique([postId, userId, prizeId])
+  @@index([postId, drawnAt])
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      Int
+  type        NotificationType
+  senderId    Int?
+  relatedType RelatedType
+  relatedId   String
+  url         String?
+  title       String
+  content     String
+  isRead      Boolean          @default(false)
+  readAt      DateTime?        @db.Timestamptz(3)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  user        User             @relation("notificationUser", fields: [userId], references: [id], onDelete: Cascade)
+  sender      User?            @relation("notificationSender", fields: [senderId], references: [id])
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([userId, isRead, createdAt])
+}
+
+model Conversation {
+  id                 String                    @id @default(cuid())
+  kind               ConversationKind          @default(DIRECT)
+  lastMessageAt      DateTime                  @default(now()) @db.Timestamptz(3)
+  createdAt          DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime                  @updatedAt @db.Timestamptz(3)
+  directConversation DirectConversation?
+  participants       ConversationParticipant[]
+  messages           DirectMessage[]
+
+  @@index([lastMessageAt])
+  @@index([kind, lastMessageAt])
+}
+
+model ConversationParticipant {
+  id                String         @id @default(cuid())
+  conversationId    String
+  userId            Int
+  unreadCount       Int            @default(0)
+  lastReadMessageId String?
+  archivedAt        DateTime?      @db.Timestamptz(3)
+  joinedAt          DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime       @updatedAt @db.Timestamptz(3)
+  conversation      Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadMessage   DirectMessage? @relation("LastReadMessage", fields: [lastReadMessageId], references: [id], onDelete: SetNull)
+
+  @@unique([conversationId, userId])
+  @@index([userId, archivedAt, updatedAt])
+  @@index([conversationId, unreadCount])
+}
+
+model DirectConversation {
+  conversationId String       @id
+  userLowId      Int
+  userHighId     Int
+  createdAt      DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(3)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([userLowId, userHighId])
+  @@index([userLowId])
+  @@index([userHighId])
+}
+
+model DirectMessage {
+  id                 String                    @id @default(cuid())
+  conversationId     String
+  senderId           Int
+  body               String
+  createdAt          DateTime                  @default(now()) @db.Timestamptz(3)
+  conversation       Conversation              @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender             User                      @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  readByParticipants ConversationParticipant[] @relation("LastReadMessage")
+
+  @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
+}
+
+enum ConversationKind {
+  DIRECT
+  GROUP
+}
+
+model Report {
+  id           String       @id @default(cuid())
+  reporterId   Int
+  targetType   TargetType
+  targetId     String
+  reasonType   String
+  reasonDetail String?
+  status       ReportStatus @default(PENDING)
+  handledBy    Int?
+  handledNote  String?
+  handledAt    DateTime?    @db.Timestamptz(3)
+  createdAt    DateTime     @default(now()) @db.Timestamptz(3)
+  reporter     User         @relation("reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  handler      User?        @relation("handler", fields: [handledBy], references: [id])
+
+  @@index([reporterId])
+  @@index([reporterId, targetType, targetId, status])
+  @@index([status])
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+}
+
+model Badge {
+  id          String            @id @default(cuid())
+  name        String
+  code        String            @unique
+  description String?
+  iconPath    String?
+  iconText    String?           @default("🏅")
+  color       String            @default("#f59e0b")
+  imageUrl    String?
+  category    String?           @default("社区成就")
+  sortOrder   Int               @default(0)
+  pointsCost  Int               @default(0)
+  status      Boolean           @default(true)
+  isHidden    Boolean           @default(false)
+  createdAt   DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime          @updatedAt @db.Timestamptz(3)
+  users       UserBadge[]
+  rules       BadgeRule[]
+  effects     PointEffectRule[]
+
+  @@index([status, sortOrder])
+}
+
+model BadgeRule {
+  id         String            @id @default(cuid())
+  badgeId    String
+  ruleType   BadgeRuleType
+  operator   BadgeRuleOperator
+  value      String
+  extraValue String?
+  sortOrder  Int               @default(0)
+  createdAt  DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime          @updatedAt @db.Timestamptz(3)
+  badge      Badge             @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@index([badgeId, sortOrder])
+}
+
+model UserBadge {
+  id            String           @id @default(cuid())
+  userId        Int
+  badgeId       String
+  grantedAt     DateTime         @default(now()) @db.Timestamptz(3)
+  grantedBy     Int?
+  grantSource   BadgeGrantSource @default(SELF_CLAIM)
+  grantSnapshot String?
+  isDisplayed   Boolean          @default(false)
+  displayOrder  Int              @default(0)
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badge         Badge            @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@index([userId, grantedAt])
+  @@index([userId, isDisplayed, displayOrder])
+  @@index([badgeId, grantedAt])
+}
+
+model VerificationType {
+  id                       String             @id @default(cuid())
+  name                     String
+  slug                     String             @unique
+  description              String?
+  iconText                 String?            @default("✔️")
+  color                    String             @default("#2563eb")
+  formSchemaJson           String?
+  pointsCost               Int                @default(0)
+  sortOrder                Int                @default(0)
+  status                   Boolean            @default(true)
+  needRemark               Boolean            @default(true)
+  userLimit                Int                @default(1)
+  allowResubmitAfterReject Boolean            @default(true)
+  createdAt                DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime           @updatedAt @db.Timestamptz(3)
+  applications             UserVerification[]
+
+  @@index([status, sortOrder])
+}
+
+model UserVerification {
+  id                String                 @id @default(cuid())
+  userId            Int
+  typeId            String
+  status            UserVerificationStatus @default(PENDING)
+  content           String
+  customIconText    String?
+  customDescription String?
+  formResponseJson  String?
+  note              String?
+  rejectReason      String?
+  reviewerId        Int?
+  submittedAt       DateTime               @default(now()) @db.Timestamptz(3)
+  reviewedAt        DateTime?              @db.Timestamptz(3)
+  createdAt         DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime               @updatedAt @db.Timestamptz(3)
+  user              User                   @relation("userVerificationApplicant", fields: [userId], references: [id], onDelete: Cascade)
+  type              VerificationType       @relation(fields: [typeId], references: [id], onDelete: Cascade)
+  reviewer          User?                  @relation("userVerificationReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status, submittedAt])
+  @@index([typeId, status, submittedAt])
+  @@index([reviewerId, reviewedAt])
+}
+
+model PointLog {
+  id          String       @id @default(cuid())
+  userId      Int
+  changeType  ChangeType
+  changeValue Int
+  reason      String
+  eventType   String       @default("GENERIC")
+  eventData   Json?
+  relatedType RelatedType?
+  relatedId   String?
+  createdAt   DateTime     @default(now()) @db.Timestamptz(3)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([eventType, createdAt])
+  @@index([relatedType, relatedId, createdAt])
+  @@index([createdAt])
+}
+
+model PostBlockPurchase {
+  id        String   @id
+  postId    String
+  blockId   String
+  buyerId   Int
+  sellerId  Int
+  price     Int
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  buyer     User     @relation("PostBlockPurchaseBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller    User     @relation("PostBlockPurchaseSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, blockId, buyerId])
+  @@index([postId, blockId])
+  @@index([buyerId, createdAt])
+  @@index([sellerId, createdAt])
+  @@index([createdAt])
+}
+
+model PointEffectRule {
+  id               String                @id @default(cuid())
+  badgeId          String?
+  name             String
+  description      String?
+  targetType       PointEffectTargetType
+  scopeKeys        String[]
+  ruleKind         PointEffectRuleKind
+  direction        PointEffectDirection  @default(BUFF)
+  value            Float
+  extraValue       Float?
+  startMinuteOfDay Int?
+  endMinuteOfDay   Int?
+  sortOrder        Int                   @default(0)
+  status           Boolean               @default(true)
+  createdAt        DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime              @updatedAt @db.Timestamptz(3)
+  badge            Badge?                @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@index([status, targetType, sortOrder])
+  @@index([badgeId, status, targetType, sortOrder])
+}
+
+model VipOrder {
+  id         String    @id @default(cuid())
+  userId     Int
+  orderType  String
+  amount     Int?
+  pointsCost Int?
+  days       Int
+  vipLevel   Int       @default(1)
+  expiresAt  DateTime? @db.Timestamptz(3)
+  remark     String?
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+model Upload {
+  id              String           @id @default(cuid())
+  userId          Int
+  bucketType      String
+  originalName    String
+  fileName        String
+  fileExt         String
+  mimeType        String
+  fileSize        Int
+  fileHash        String?
+  storagePath     String
+  urlPath         String
+  createdAt       DateTime         @default(now()) @db.Timestamptz(3)
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postAttachments PostAttachment[]
+  referenceSnapshot UploadReferenceSnapshot?
+
+  @@unique([userId, bucketType, fileHash])
+  @@index([fileHash])
+  @@index([userId, createdAt])
+}
+
+model UploadReferenceScanJob {
+  id                  String                    @id @default(cuid())
+  kind                String
+  status              String                    @default("QUEUED")
+  backgroundJobId     String?
+  adminId             Int?
+  ip                  String?
+  keyword             String?
+  bucketType          String?
+  limit               Int?
+  total               Int                       @default(0)
+  scanned             Int                       @default(0)
+  referenced          Int                       @default(0)
+  orphan              Int                       @default(0)
+  deletedRecords      Int                       @default(0)
+  deletedFiles        Int                       @default(0)
+  retainedSharedFiles Int                       @default(0)
+  failed              Int                       @default(0)
+  errorMessage        String?
+  startedAt           DateTime?                 @db.Timestamptz(3)
+  finishedAt          DateTime?                 @db.Timestamptz(3)
+  createdAt           DateTime                  @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                  @updatedAt @db.Timestamptz(3)
+  admin               User?                     @relation("UploadReferenceScanJobAdmin", fields: [adminId], references: [id], onDelete: SetNull)
+  snapshots           UploadReferenceSnapshot[]
+
+  @@index([kind, status, createdAt])
+  @@index([status, createdAt])
+  @@index([adminId, createdAt])
+  @@index([backgroundJobId])
+  @@index([createdAt])
+}
+
+model UploadReferenceSnapshot {
+  uploadId             String                  @id
+  scanJobId            String?
+  referenceStatus      String
+  referenceCount       Int                     @default(0)
+  postAttachmentCount  Int                     @default(0)
+  directReferenceCount Int                     @default(0)
+  referenceSourcesJson Json?
+  scannedAt            DateTime                @default(now()) @db.Timestamptz(3)
+  upload               Upload                  @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  scanJob              UploadReferenceScanJob? @relation(fields: [scanJobId], references: [id], onDelete: SetNull)
+
+  @@index([referenceStatus, scannedAt])
+  @@index([scanJobId])
+  @@index([scannedAt])
+}
+
+model PostAttachment {
+  id                  String                   @id @default(cuid())
+  postId              String
+  uploadId            String?
+  sourceType          PostAttachmentSourceType
+  name                String
+  fileExt             String?
+  mimeType            String?
+  fileSize            Int?
+  externalUrl         String?
+  externalCode        String?
+  minDownloadLevel    Int                      @default(0)
+  minDownloadVipLevel Int                      @default(0)
+  pointsCost          Int                      @default(0)
+  requireReplyUnlock  Boolean                  @default(false)
+  downloadCount       Int                      @default(0)
+  sortOrder           Int                      @default(0)
+  createdAt           DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime                 @updatedAt @db.Timestamptz(3)
+  post                Post                     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  upload              Upload?                  @relation(fields: [uploadId], references: [id], onDelete: SetNull)
+  purchases           PostAttachmentPurchase[]
+
+  @@index([postId, sortOrder])
+  @@index([postId, downloadCount])
+  @@index([uploadId])
+}
+
+model PostAttachmentPurchase {
+  id           String         @id
+  postId       String
+  attachmentId String
+  buyerId      Int
+  sellerId     Int
+  pointsCost   Int
+  createdAt    DateTime       @default(now()) @db.Timestamptz(3)
+  post         Post           @relation(fields: [postId], references: [id], onDelete: Cascade)
+  attachment   PostAttachment @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+  buyer        User           @relation("PostAttachmentPurchaseBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller       User           @relation("PostAttachmentPurchaseSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@unique([attachmentId, buyerId])
+  @@index([postId, buyerId])
+  @@index([sellerId, createdAt])
+}
+
+model FriendLink {
+  id          String           @id @default(cuid())
+  name        String
+  url         String           @unique
+  logoPath    String?
+  description String?
+  contact     String?
+  sortOrder   Int              @default(0)
+  clickCount  Int              @default(0)
+  status      FriendLinkStatus @default(PENDING)
+  reviewNote  String?
+  reviewedAt  DateTime?        @db.Timestamptz(3)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @db.Timestamptz(3)
+
+  @@index([status, sortOrder, createdAt])
+  @@index([createdAt])
+}
+
+model BoardApplication {
+  id           String                 @id @default(cuid())
+  applicantId  Int
+  zoneId       String
+  boardId      String?
+  name         String
+  slug         String
+  description  String?
+  icon         String?
+  reason       String?
+  status       BoardApplicationStatus @default(PENDING)
+  reviewNote   String?
+  reviewedById Int?
+  reviewedAt   DateTime?              @db.Timestamptz(3)
+  createdAt    DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime               @updatedAt @db.Timestamptz(3)
+  applicant    User                   @relation("boardApplicationApplicant", fields: [applicantId], references: [id], onDelete: Cascade)
+  zone         Zone                   @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  board        Board?                 @relation(fields: [boardId], references: [id], onDelete: SetNull)
+  reviewer     User?                  @relation("boardApplicationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([applicantId, status, createdAt])
+  @@index([zoneId, status, createdAt])
+  @@index([status, createdAt])
+  @@index([reviewedById, reviewedAt])
+  @@index([boardId])
+}
+
+model Announcement {
+  id          String                 @id @default(cuid())
+  title       String
+  content     String
+  status      AnnouncementStatus     @default(DRAFT)
+  isPinned    Boolean                @default(false)
+  type        SiteDocumentType       @default(ANNOUNCEMENT)
+  sourceType  SiteDocumentSourceType @default(DOCUMENT)
+  slug        String?
+  linkUrl     String?
+  titleColor  String?
+  titleBold   Boolean                @default(false)
+  publishedAt DateTime?              @db.Timestamptz(3)
+  createdBy   Int
+  createdAt   DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime               @updatedAt @db.Timestamptz(3)
+  creator     User                   @relation("announcementCreator", fields: [createdBy], references: [id])
+
+  @@unique([type, slug])
+  @@index([type, status])
+  @@index([type, publishedAt])
+}
+
+model CustomPage {
+  id                  String             @id @default(cuid())
+  title               String
+  routePath           String             @unique
+  htmlContent         String
+  status              AnnouncementStatus @default(DRAFT)
+  includeHeader       Boolean            @default(true)
+  includeFooter       Boolean            @default(true)
+  includeLeftSidebar  Boolean            @default(false)
+  includeRightSidebar Boolean            @default(false)
+  publishedAt         DateTime?          @db.Timestamptz(3)
+  createdBy           Int
+  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime           @updatedAt @db.Timestamptz(3)
+  creator             User               @relation("customPageCreator", fields: [createdBy], references: [id])
+
+  @@index([status, publishedAt])
+}
+
+model SensitiveWord {
+  id         String   @id @default(cuid())
+  word       String   @unique
+  matchType  String
+  actionType String
+  status     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([status, createdAt])
+  @@index([actionType, status])
+}
+
+model AdminLog {
+  id         String   @id @default(cuid())
+  adminId    Int
+  action     String
+  targetType String
+  targetId   String?
+  detail     String?
+  ip         String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  admin      User     @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([adminId, createdAt])
+  @@index([targetType])
+  @@index([targetType, targetId, createdAt])
+  @@index([createdAt])
+}
+
+model RssSetting {
+  id                    String   @id @default(cuid())
+  maxConcurrentJobs     Int      @default(2)
+  maxRetryCount         Int      @default(3)
+  retryBackoffSec       Int      @default(300)
+  fetchTimeoutMs        Int      @default(15000)
+  maxResponseBytes      Int      @default(1048576)
+  maxRedirects          Int      @default(3)
+  failurePauseThreshold Int      @default(5)
+  homeDisplayEnabled    Boolean  @default(false)
+  homePageSize          Int      @default(20)
+  userAgent             String   @default("bbs-rss-worker/1.0")
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(3)
+
+  @@map("rss_setting")
+}
+
+model RssSource {
+  id               String                 @id @default(cuid())
+  siteName         String
+  description      String?
+  feedUrl          String                 @unique
+  logoPath         String?
+  intervalMinutes  Int
+  requiresReview   Boolean                @default(true)
+  requestTimeoutMs Int?
+  maxRetryCount    Int?
+  createdAt        DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime               @updatedAt @db.Timestamptz(3)
+  entries          RssEntry[]
+  applications     RssSourceApplication[]
+
+  @@index([createdAt])
+  @@map("rss_source")
+}
+
+model RssEntry {
+  id             String               @id @default(cuid())
+  sourceId       String
+  guid           String?
+  linkUrl        String?
+  title          String
+  author         String?
+  summary        String?
+  contentHtml    String?
+  contentText    String?
+  publishedAt    DateTime?            @db.Timestamptz(3)
+  reviewStatus   RssEntryReviewStatus @default(PENDING)
+  reviewNote     String?
+  reviewedById   Int?
+  reviewedAt     DateTime?            @db.Timestamptz(3)
+  likeCount      Int                  @default(0)
+  tipCount       Int                  @default(0)
+  tipTotalPoints Int                  @default(0)
+  dedupeKey      String
+  rawJson        Json
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime             @updatedAt @db.Timestamptz(3)
+  source         RssSource            @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  reviewer       User?                @relation("rssEntryReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  likes          RssEntryLike[]
+  tips           RssEntryTip[]
+
+  @@unique([sourceId, dedupeKey])
+  @@index([sourceId, publishedAt])
+  @@index([sourceId, createdAt])
+  @@index([reviewStatus, createdAt])
+  @@index([reviewedById, reviewedAt])
+  @@map("rss_entry")
+}
+
+model RssEntryLike {
+  id        String   @id @default(cuid())
+  entryId   String
+  userId    Int
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  entry     RssEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([entryId, userId])
+  @@index([entryId, createdAt])
+  @@index([userId, createdAt])
+  @@map("rss_entry_like")
+}
+
+model RssEntryTip {
+  id               String   @id @default(cuid())
+  entryId          String
+  senderId         Int
+  amount           Int
+  giftId           String?
+  giftNameSnapshot String?
+  giftIconSnapshot String?
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  entry            RssEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  sender           User     @relation("RssEntryTipSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([entryId, createdAt])
+  @@index([senderId, createdAt])
+  @@index([entryId, senderId, createdAt])
+  @@map("rss_entry_tip")
+}
+
+model RssSourceApplication {
+  id           String                     @id @default(cuid())
+  applicantId  Int
+  siteName     String
+  description  String?
+  feedUrl      String
+  logoPath     String?
+  status       RssSourceApplicationStatus @default(PENDING)
+  reviewNote   String?
+  reviewedById Int?
+  reviewedAt   DateTime?                  @db.Timestamptz(3)
+  sourceId     String?
+  createdAt    DateTime                   @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime                   @updatedAt @db.Timestamptz(3)
+  applicant    User                       @relation("rssSourceApplicationApplicant", fields: [applicantId], references: [id], onDelete: Cascade)
+  reviewer     User?                      @relation("rssSourceApplicationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  source       RssSource?                 @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+
+  @@index([applicantId, status, createdAt])
+  @@index([status, createdAt])
+  @@index([reviewedById, reviewedAt])
+  @@index([sourceId])
+  @@map("rss_source_application")
+}
+
+model AddonRegistry {
+  id               String              @id @default(cuid())
+  addonId          String              @unique
+  name             String
+  version          String
+  description      String?
+  sourceDir        String?
+  state            AddonRegistryState  @default(ENABLED)
+  enabled          Boolean             @default(true)
+  manifestJson     Json?
+  permissionsJson  Json?
+  installedAt      DateTime?           @db.Timestamptz(3)
+  disabledAt       DateTime?           @db.Timestamptz(3)
+  uninstalledAt    DateTime?           @db.Timestamptz(3)
+  lastErrorAt      DateTime?           @db.Timestamptz(3)
+  lastErrorMessage String?
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime            @updatedAt @db.Timestamptz(3)
+  logs             AddonLifecycleLog[]
+
+  @@index([state, updatedAt])
+  @@map("addon_registry")
+}
+
+model AddonLifecycleLog {
+  id           String        @id @default(cuid())
+  addonId      String
+  action       String
+  status       String
+  message      String?
+  metadataJson Json?
+  createdAt    DateTime      @default(now()) @db.Timestamptz(3)
+  addon        AddonRegistry @relation(fields: [addonId], references: [addonId], onDelete: Cascade)
+
+  @@index([addonId, createdAt])
+  @@index([action, createdAt])
+  @@map("addon_lifecycle_log")
+}
+
+model AddonConfig {
+  id        String   @id @default(cuid())
+  addonId   String
+  configKey String
+  valueJson Json?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([addonId, configKey])
+  @@index([addonId, updatedAt])
+  @@map("addon_config")
+}
+
+model SiteSetting {
+  id                            String   @id @default(cuid())
+  siteName                      String
+  siteSlogan                    String
+  siteDescription               String
+  siteLogoText                  String
+  siteLogoPath                  String?
+  siteSeoKeywords               String?  @default("")
+  pointName                     String   @default("积分")
+  analyticsCode                 String?
+  postLinkDisplayMode           String   @default("SLUG")
+  homeFeedPostListDisplayMode   String   @default("DEFAULT")
+  homeSidebarStatsCardEnabled   Boolean  @default(true)
+  friendLinksEnabled            Boolean  @default(true)
+  friendLinkApplicationEnabled  Boolean  @default(true)
+  friendLinkAnnouncement        String   @default("欢迎与本站交换友情链接，请先添加我方链接后再提交申请，我们会在 1-3 个工作日内完成审核。")
+  checkInEnabled                Boolean  @default(true)
+  checkInReward                 Int      @default(5)
+  checkInMakeUpCardPrice        Int      @default(0)
+  checkInVipMakeUpCardPrice     Int      @default(0)
+  postOfflinePrice              Int      @default(0)
+  postOfflineVip1Price          Int      @default(0)
+  postOfflineVip2Price          Int      @default(0)
+  postOfflineVip3Price          Int      @default(0)
+  inviteRewardInviter           Int      @default(0)
+  inviteRewardInvitee           Int      @default(0)
+  registrationEnabled           Boolean  @default(true)
+  registrationRequireInviteCode Boolean  @default(false)
+  registerInviteCodeEnabled     Boolean  @default(true)
+  inviteCodePurchaseEnabled     Boolean  @default(false)
+  inviteCodePrice               Int      @default(0)
+  registerCaptchaMode           String   @default("OFF")
+  loginCaptchaMode              String   @default("OFF")
+  turnstileSiteKey              String?
+  nicknameChangePointCost       Int      @default(0)
+  postEditableMinutes           Int      @default(10)
+  commentEditableMinutes        Int      @default(5)
+  godCommentAutoLikeThreshold   Int      @default(10)
+  tippingEnabled                Boolean  @default(false)
+  tippingDailyLimit             Int      @default(3)
+  tippingPerPostLimit           Int      @default(1)
+  tippingAmounts                String   @default("10,30,50,100")
+  postRedPacketEnabled          Boolean  @default(false)
+  postRedPacketMaxPoints        Int      @default(100)
+  postRedPacketDailyLimit       Int      @default(100)
+  heatViewWeight                Int      @default(1)
+  heatCommentWeight             Int      @default(8)
+  heatLikeWeight                Int      @default(6)
+  heatTipCountWeight            Int      @default(10)
+  heatTipPointsWeight           Int      @default(1)
+  heatStageThresholds           String   @default("0,80,180,320,520,780,1100,1500,2000")
+  heatStageColors               String   @default("#4A4A4A,#808080,#9B8F7F,#B87333,#C4A777,#E8C547,#FFA500,#D96C3B,#C41E3A")
+  registerEmailEnabled          Boolean  @default(false)
+  registerEmailRequired         Boolean  @default(false)
+  registerEmailVerification     Boolean  @default(false)
+  registerPhoneEnabled          Boolean  @default(false)
+  registerPhoneRequired         Boolean  @default(false)
+  registerPhoneVerification     Boolean  @default(false)
+  registerNicknameEnabled       Boolean  @default(true)
+  registerNicknameRequired      Boolean  @default(false)
+  registerGenderEnabled         Boolean  @default(false)
+  registerGenderRequired        Boolean  @default(false)
+  registerInviterEnabled        Boolean  @default(true)
+  smtpEnabled                   Boolean  @default(false)
+  smtpHost                      String?
+  smtpPort                      Int?
+  smtpUser                      String?
+  smtpPass                      String?
+  smtpFrom                      String?
+  smtpSecure                    Boolean  @default(false)
+  vipMonthlyPrice               Int      @default(30)
+  vipQuarterlyPrice             Int      @default(88)
+  vipYearlyPrice                Int      @default(288)
+  uploadProvider                String   @default("local")
+  uploadLocalPath               String   @default("uploads")
+  uploadBaseUrl                 String?
+  uploadOssBucket               String?
+  uploadOssRegion               String?
+  uploadOssEndpoint             String?
+  uploadRequireLogin            Boolean  @default(true)
+  uploadAllowedImageTypes       String   @default("jpg,jpeg,png,gif,webp")
+  uploadMaxFileSizeMb           Int      @default(5)
+  uploadAvatarMaxFileSizeMb     Int      @default(2)
+  markdownEmojiMapJson          String?  @default("[]")
+  headerAppLinksJson            String?  @default("[{\"id\":\"home\",\"name\":\"首页\",\"href\":\"/\"},{\"id\":\"boards\",\"name\":\"节点\",\"href\":\"/boards\"},{\"id\":\"write\",\"name\":\"发帖\",\"href\":\"/write\"},{\"id\":\"messages\",\"name\":\"消息\",\"href\":\"/messages\"}]")
+  headerAppIconName             String   @default("grid")
+  appStateJson                  String?  @default("{}")
+  sensitiveStateJson            String?  @default("{}")
+  footerLinksJson               String?  @default("[{\"label\":\"关于\",\"href\":\"/about\"},{\"label\":\"小黑屋\",\"href\":\"/prison\"},{\"label\":\"帮助文档\",\"href\":\"/help\"},{\"label\":\"FAQ\",\"href\":\"/faq\"},{\"label\":\"协议\",\"href\":\"/terms\"}]")
+  createdAt                     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt                     DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model TaskDefinition {
+  id                  String                @id @default(cuid())
+  code                String                @unique
+  title               String
+  description         String?
+  category            TaskCategory
+  cycleType           TaskCycleType
+  conditionType       TaskConditionType
+  conditionConfigJson Json?
+  targetCount         Int
+  rewardNormalMin     Int                   @default(0)
+  rewardNormalMax     Int                   @default(0)
+  rewardVip1Min       Int                   @default(0)
+  rewardVip1Max       Int                   @default(0)
+  rewardVip2Min       Int                   @default(0)
+  rewardVip2Max       Int                   @default(0)
+  rewardVip3Min       Int                   @default(0)
+  rewardVip3Max       Int                   @default(0)
+  status              TaskDefinitionStatus  @default(ACTIVE)
+  sortOrder           Int                   @default(0)
+  startsAt            DateTime?             @db.Timestamptz(3)
+  endsAt              DateTime?             @db.Timestamptz(3)
+  createdById         Int?
+  updatedById         Int?
+  createdAt           DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime              @updatedAt @db.Timestamptz(3)
+  createdBy           User?                 @relation("TaskDefinitionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy           User?                 @relation("TaskDefinitionUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  progresses          UserTaskProgress[]
+  eventLedgers        UserTaskEventLedger[]
+
+  @@index([status, conditionType, sortOrder])
+  @@index([category, cycleType, sortOrder])
+  @@index([startsAt, endsAt])
+}
+
+model PaymentOrder {
+  id                      String                   @id @default(cuid())
+  merchantOrderNo         String                   @unique
+  bizScene                String
+  bizOrderId              String?
+  userId                  Int?
+  subject                 String
+  body                    String?
+  clientType              String
+  amountFen               Int
+  currency                String                   @default("CNY")
+  providerCode            String
+  channelCode             String
+  routeSnapshotJson       Json?
+  status                  PaymentOrderStatus       @default(PENDING)
+  providerTradeNo         String?                  @unique
+  providerBuyerId         String?
+  lastErrorCode           String?
+  lastErrorMessage        String?
+  paidAt                  DateTime?                @db.Timestamptz(3)
+  closedAt                DateTime?                @db.Timestamptz(3)
+  expiredAt               DateTime?                @db.Timestamptz(3)
+  fulfillmentStatus       PaymentFulfillmentStatus @default(PENDING)
+  fulfilledAt             DateTime?                @db.Timestamptz(3)
+  fulfillmentErrorMessage String?
+  metadataJson            Json?
+  rawSuccessPayloadJson   Json?
+  createdAt               DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime                 @updatedAt @db.Timestamptz(3)
+  user                    User?                    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  attempts                PaymentAttempt[]
+  notifications           PaymentNotification[]
+  refunds                 PaymentRefund[]
+
+  @@index([bizScene, bizOrderId, createdAt])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([fulfillmentStatus, createdAt])
+  @@index([providerCode, channelCode, createdAt])
+}
+
+model PaymentAttempt {
+  id                  String               @id @default(cuid())
+  orderId             String
+  attemptNo           Int
+  action              String               @default("checkout")
+  providerCode        String
+  channelCode         String
+  status              PaymentAttemptStatus @default(PENDING)
+  presentationType    String?
+  requestPayloadJson  Json?
+  responsePayloadJson Json?
+  providerTraceId     String?
+  redirectUrl         String?
+  formHtml            String?
+  qrCode              String?
+  providerTradeNo     String?
+  errorCode           String?
+  errorMessage        String?
+  createdAt           DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime             @updatedAt @db.Timestamptz(3)
+  order               PaymentOrder         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, attemptNo])
+  @@index([orderId, createdAt])
+  @@index([providerCode, channelCode, createdAt])
+}
+
+model PaymentNotification {
+  id              String        @id @default(cuid())
+  orderId         String?
+  providerCode    String
+  channelCode     String?
+  notifyType      String?
+  notifyId        String?
+  merchantOrderNo String?
+  providerTradeNo String?
+  tradeStatus     String?
+  verified        Boolean       @default(false)
+  handled         Boolean       @default(false)
+  payloadJson     Json
+  errorMessage    String?
+  receivedAt      DateTime      @default(now()) @db.Timestamptz(3)
+  handledAt       DateTime?     @db.Timestamptz(3)
+  order           PaymentOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, receivedAt])
+  @@index([providerCode, notifyId, receivedAt])
+  @@index([merchantOrderNo, receivedAt])
+}
+
+model PaymentRefund {
+  id                 String              @id @default(cuid())
+  orderId            String
+  refundNo           String              @unique
+  amountFen          Int
+  status             PaymentRefundStatus @default(PENDING)
+  reason             String?
+  providerRefundNo   String?
+  providerResultJson Json?
+  requestedAt        DateTime            @default(now()) @db.Timestamptz(3)
+  completedAt        DateTime?           @db.Timestamptz(3)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(3)
+  order              PaymentOrder        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, requestedAt])
+  @@index([status, requestedAt])
+}
+
+model AiReplyTask {
+  id                 String                @id @default(cuid())
+  sourceType         AiReplyTaskSourceType
+  sourceKey          String                @unique
+  status             AiReplyTaskStatus     @default(PENDING)
+  postId             String
+  sourceCommentId    String?
+  generatedCommentId String?               @unique
+  triggerUserId      Int
+  agentUserId        Int
+  attemptCount       Int                   @default(0)
+  maxAttempts        Int                   @default(3)
+  scheduledAt        DateTime              @default(now()) @db.Timestamptz(3)
+  startedAt          DateTime?             @db.Timestamptz(3)
+  finishedAt         DateTime?             @db.Timestamptz(3)
+  errorMessage       String?
+  resultExcerpt      String?
+  createdAt          DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime              @updatedAt @db.Timestamptz(3)
+  post               Post                  @relation(fields: [postId], references: [id], onDelete: Cascade)
+  sourceComment      Comment?              @relation("AiReplyTaskSourceComment", fields: [sourceCommentId], references: [id], onDelete: Cascade)
+  generatedComment   Comment?              @relation("AiReplyTaskGeneratedComment", fields: [generatedCommentId], references: [id], onDelete: SetNull)
+  triggerUser        User                  @relation("AiReplyTaskTriggerUser", fields: [triggerUserId], references: [id], onDelete: Cascade)
+  agentUser          User                  @relation("AiReplyTaskAgentUser", fields: [agentUserId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledAt, createdAt])
+  @@index([postId, createdAt])
+  @@index([sourceCommentId])
+  @@index([agentUserId, createdAt])
+  @@index([triggerUserId, createdAt])
+}
+
+model AutoCategorizeTask {
+  id                   String                       @id @default(cuid())
+  sourceType           AutoCategorizeTaskSourceType
+  sourceKey            String                       @unique
+  status               AiReplyTaskStatus            @default(PENDING)
+  postId               String?
+  requesterUserId      Int
+  title                String
+  content              String
+  appendedContent      String?
+  allowBoardSuggestion Boolean                      @default(true)
+  allowTagSuggestion   Boolean                      @default(true)
+  attemptCount         Int                          @default(0)
+  maxAttempts          Int                          @default(3)
+  scheduledAt          DateTime                     @default(now()) @db.Timestamptz(3)
+  startedAt            DateTime?                    @db.Timestamptz(3)
+  finishedAt           DateTime?                    @db.Timestamptz(3)
+  errorMessage         String?
+  resultStatus         String?
+  resultBoardId        String?
+  resultTagIds         String[]
+  resultTagsJson       Json?
+  resultReasoning      String?
+  resultModelKey       String?
+  resultRawPreview     String?
+  createdAt            DateTime                     @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                     @updatedAt @db.Timestamptz(3)
+  post                 Post?                        @relation(fields: [postId], references: [id], onDelete: Cascade)
+  requesterUser        User                         @relation("AutoCategorizeTaskRequesterUser", fields: [requesterUserId], references: [id], onDelete: Cascade)
+  resultBoard          Board?                       @relation("AutoCategorizeTaskResultBoard", fields: [resultBoardId], references: [id], onDelete: SetNull)
+
+  @@index([status, scheduledAt, createdAt])
+  @@index([postId, createdAt])
+  @@index([requesterUserId, createdAt])
+  @@index([sourceType, createdAt])
+}
+
+model PostTip {
+  id         String   @id @default(cuid())
+  postId     String
+  commentId  String?
+  senderId   Int
+  receiverId Int
+  amount     Int
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment    Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  sender     User     @relation("PostTipSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver   User     @relation("PostTipReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([postId])
+  @@index([commentId])
+  @@index([senderId, createdAt])
+  @@index([receiverId, createdAt])
+  @@index([postId, senderId, createdAt])
+  @@index([commentId, senderId, createdAt])
+}
+
+model PostAuction {
+  id                       String                 @id @default(cuid())
+  postId                   String                 @unique
+  sellerId                 Int
+  mode                     PostAuctionMode
+  status                   PostAuctionStatus      @default(DRAFT)
+  pricingRule              PostAuctionPricingRule @default(FIRST_PRICE)
+  startPrice               Int
+  incrementStep            Int                    @default(1)
+  startsAt                 DateTime?              @db.Timestamptz(3)
+  endsAt                   DateTime               @db.Timestamptz(3)
+  activatedAt              DateTime?              @db.Timestamptz(3)
+  participantCount         Int                    @default(0)
+  bidCount                 Int                    @default(0)
+  leaderUserId             Int?
+  leaderBidAmount          Int?
+  winningBidAmount         Int?
+  finalPrice               Int?
+  winnerUserId             Int?
+  winnerOnlyContent        String?
+  winnerOnlyContentPreview String?
+  settledAt                DateTime?              @db.Timestamptz(3)
+  cancelledAt              DateTime?              @db.Timestamptz(3)
+  createdAt                DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt                DateTime               @updatedAt @db.Timestamptz(3)
+  post                     Post                   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  seller                   User                   @relation("PostAuctionSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+  winner                   User?                  @relation("PostAuctionWinner", fields: [winnerUserId], references: [id], onDelete: SetNull)
+  entries                  PostAuctionEntry[]
+  bidRecords               PostAuctionBidRecord[]
+
+  @@index([sellerId, createdAt])
+  @@index([status, endsAt])
+  @@index([winnerUserId, settledAt])
+}
+
+model PostAuctionEntry {
+  id               String                 @id @default(cuid())
+  auctionId        String
+  userId           Int
+  currentBidAmount Int
+  frozenAmount     Int
+  status           PostAuctionEntryStatus @default(ACTIVE)
+  firstBidAt       DateTime               @default(now()) @db.Timestamptz(3)
+  lastBidAt        DateTime               @default(now()) @db.Timestamptz(3)
+  refundedAt       DateTime?              @db.Timestamptz(3)
+  auction          PostAuction            @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  user             User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([auctionId, userId])
+  @@index([auctionId, currentBidAmount])
+  @@index([userId, lastBidAt])
+}
+
+model PostAuctionBidRecord {
+  id        String      @id @default(cuid())
+  auctionId String
+  userId    Int
+  amount    Int
+  createdAt DateTime    @default(now()) @db.Timestamptz(3)
+  auction   PostAuction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([auctionId, createdAt])
+  @@index([auctionId, amount, createdAt])
+  @@index([userId, createdAt])
+}
+
+model GiftDefinition {
+  id        String   @id
+  name      String
+  icon      String
+  price     Int
+  sortOrder Int      @default(0)
+  isEnabled Boolean  @default(true)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([isEnabled, sortOrder, createdAt])
+}
+
+model PostGiftEvent {
+  id               String   @id
+  postId           String
+  commentId        String?
+  senderId         Int
+  receiverId       Int
+  giftId           String
+  giftNameSnapshot String
+  giftIconSnapshot String
+  unitPrice        Int
+  quantity         Int      @default(1)
+  totalPoints      Int
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  post             Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment          Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  sender           User     @relation("PostGiftSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver         User     @relation("PostGiftReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@index([commentId, createdAt])
+  @@index([senderId, createdAt])
+  @@index([receiverId, createdAt])
+  @@index([giftId, createdAt])
+  @@index([commentId, giftId, createdAt], map: "post_gift_comment_gift_created_idx")
+  @@index([postId, senderId, createdAt])
+  @@index([commentId, senderId, createdAt])
+}
+
+model PostGiftStats {
+  id               String   @id
+  postId           String
+  receiverId       Int
+  giftId           String
+  giftNameSnapshot String
+  giftIconSnapshot String
+  unitPrice        Int
+  totalCount       Int      @default(0)
+  totalPoints      Int      @default(0)
+  lastSentAt       DateTime @default(now()) @db.Timestamptz(3)
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
+  post             Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  receiver         User     @relation("PostGiftStatsReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, giftId])
+  @@index([postId, totalCount])
+  @@index([postId, totalPoints])
+  @@index([receiverId, lastSentAt])
+}
+
+model PostRedPacket {
+  id              String                      @id @default(cuid())
+  postId          String                      @unique
+  senderId        Int
+  grantMode       PostRedPacketGrantMode
+  claimOrderMode  PostRedPacketClaimOrderMode @default(FIRST_COME_FIRST_SERVED)
+  triggerType     PostRedPacketTriggerType
+  totalPoints     Int
+  packetCount     Int
+  remainingPoints Int
+  remainingCount  Int
+  status          PostRedPacketStatus         @default(ACTIVE)
+  claimedCount    Int                         @default(0)
+  claimedPoints   Int                         @default(0)
+  createdAt       DateTime                    @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime                    @updatedAt @db.Timestamptz(3)
+  post            Post                        @relation(fields: [postId], references: [id], onDelete: Cascade)
+  sender          User                        @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  claims          PostRedPacketClaim[]
+
+  @@index([senderId, createdAt])
+  @@index([status, createdAt])
+}
+
+model PostRedPacketClaim {
+  id               String                   @id @default(cuid())
+  redPacketId      String
+  postId           String
+  userId           Int
+  triggerType      PostRedPacketTriggerType
+  triggerCommentId String?
+  amount           Int
+  createdAt        DateTime                 @default(now()) @db.Timestamptz(3)
+  redPacket        PostRedPacket            @relation(fields: [redPacketId], references: [id], onDelete: Cascade)
+  post             Post                     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user             User                     @relation("PostRedPacketClaimUser", fields: [userId], references: [id], onDelete: Cascade)
+  triggerComment   Comment?                 @relation(fields: [triggerCommentId], references: [id], onDelete: SetNull)
+  effectFeedbacks  CommentEffectFeedback[]
+
+  @@unique([redPacketId, userId, triggerCommentId])
+  @@index([postId, createdAt])
+  @@index([userId, createdAt])
+  @@index([redPacketId, createdAt])
+}
+
+model CommentEffectFeedback {
+  id            String              @id @default(cuid())
+  postId        String
+  commentId     String              @unique
+  userId        Int
+  scene         String
+  rewardClaimId String?
+  feedbackJson  Json
+  createdAt     DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime            @updatedAt @db.Timestamptz(3)
+  post          Post                @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment       Comment             @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rewardClaim   PostRedPacketClaim? @relation(fields: [rewardClaimId], references: [id], onDelete: SetNull)
+
+  @@index([postId, commentId])
+  @@index([postId, createdAt])
+  @@index([userId, createdAt])
+  @@index([rewardClaimId])
+}
+
+model InviteCode {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  createdById Int?
+  usedById    Int?
+  usedAt      DateTime? @db.Timestamptz(3)
+  expiresAt   DateTime? @db.Timestamptz(3)
+  note        String?
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+  createdBy   User?     @relation("InviteCodeCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  usedBy      User?     @relation("InviteCodeConsumer", fields: [usedById], references: [id], onDelete: SetNull)
+
+  @@index([createdById])
+  @@index([usedById])
+  @@index([createdAt])
+}
+
+model RedeemCode {
+  id                String    @id @default(cuid())
+  code              String    @unique
+  points            Int
+  codeCategory      String    @default("default")
+  categoryUserLimit Int?
+  createdById       Int?
+  redeemedById      Int?
+  redeemedAt        DateTime? @db.Timestamptz(3)
+  expiresAt         DateTime? @db.Timestamptz(3)
+  note              String?
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+  createdBy         User?     @relation("RedeemCodeCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  redeemedBy        User?     @relation("RedeemCodeConsumer", fields: [redeemedById], references: [id], onDelete: SetNull)
+
+  @@index([codeCategory, createdAt])
+  @@index([codeCategory, redeemedById])
+  @@index([createdById])
+  @@index([redeemedById])
+  @@index([createdAt])
+}
+
+model UserCheckInLog {
+  id          String   @id @default(cuid())
+  userId      Int
+  reward      Int
+  checkedInOn String
+  isMakeUp    Boolean  @default(false)
+  makeUpCost  Int      @default(0)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, checkedInOn])
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([checkedInOn])
+}
+
+model UserTaskProgress {
+  id                    String                 @id @default(cuid())
+  userId                Int
+  taskId                String
+  cycleKey              String
+  categorySnapshot      TaskCategory
+  cycleTypeSnapshot     TaskCycleType
+  conditionTypeSnapshot TaskConditionType
+  targetCountSnapshot   Int
+  rewardTierSnapshot    TaskRewardTier
+  rewardMinSnapshot     Int
+  rewardMaxSnapshot     Int
+  progressCount         Int                    @default(0)
+  settledRewardPoints   Int?
+  status                UserTaskProgressStatus @default(IN_PROGRESS)
+  completedAt           DateTime?              @db.Timestamptz(3)
+  settledAt             DateTime?              @db.Timestamptz(3)
+  metadataJson          Json?
+  createdAt             DateTime               @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime               @updatedAt @db.Timestamptz(3)
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task                  TaskDefinition         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, taskId, cycleKey])
+  @@index([userId, categorySnapshot, cycleKey])
+  @@index([userId, status, updatedAt])
+  @@index([taskId, cycleKey])
+}
+
+model UserTaskEventLedger {
+  id        String         @id @default(cuid())
+  userId    Int
+  taskId    String
+  cycleKey  String
+  eventKey  String
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task      TaskDefinition @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, taskId, cycleKey, eventKey])
+  @@index([userId, createdAt])
+  @@index([taskId, cycleKey, createdAt])
+}
+
+model UserLoginLog {
+  id        String   @id @default(cuid())
+  userId    Int
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+// ===== AI capabilities (plan_ai_reply_enhance Step 6) =====
+
+model AiUsageDaily {
+  id        String   @id @default(cuid())
+  appKey    String
+  day       DateTime @db.Date
+  count     Int      @default(0)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  @@unique([appKey, day])
+  @@index([day])
+}
+
+model AiSummaryCache {
+  id          String   @id @default(cuid())
+  sourceKind  String
+  sourceId    String
+  contentHash String
+  summary     String
+  modelKey    String
+  hitCount    Int      @default(0)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  lastHitAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([sourceKind, sourceId, contentHash, modelKey])
+  @@index([sourceKind, sourceId])
+  @@index([createdAt])
+}
+
+model AiModerationSuggestion {
+  id                String             @id @default(cuid())
+  postId            String
+  suggestedBoardId  String?
+  suggestedTagIds   String[]
+  suggestedTagsJson Json?
+  reasoning         String?
+  modelKey          String
+  status            AiModerationStatus @default(PENDING)
+  reviewerId        Int?
+  decidedAt         DateTime?          @db.Timestamptz(3)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+
+  post           Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  suggestedBoard Board? @relation(fields: [suggestedBoardId], references: [id], onDelete: SetNull)
+  reviewer       User?  @relation(fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([postId])
+  @@index([status, createdAt])
+  @@index([reviewerId])
+}

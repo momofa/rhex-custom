@@ -586,9 +586,23 @@
     max-width: 100%;
     margin: 0 !important;
   }
+  .markdown-body.markdown-body--large-images p:has(> img:only-child),
+  .markdown-body.markdown-body--large-images p:has(> a:only-child > img:only-child) {
+    display: block;
+    max-width: 100%;
+    margin: 0.75rem 0;
+  }
+  .markdown-body.markdown-body--large-images img.my-3,
+  .markdown-body.markdown-body--large-images img.my-4 {
+    max-width: 100%;
+  }
   .markdown-body.markdown-body--image-only img.my-3,
   .markdown-body.markdown-body--image-only img.my-4 {
     max-width: 100%;
+  }
+  .markdown-body.markdown-body--small-images.markdown-body--image-only img.my-3,
+  .markdown-body.markdown-body--small-images.markdown-body--image-only img.my-4 {
+    max-width: 20em;
   }
   .message-markdown img.my-3,
   .message-markdown img.my-4 {

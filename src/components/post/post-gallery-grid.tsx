@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { ImageIcon, ImageOff, MessageCircle, type LucideIcon } from "lucide-react"
 
 import { LevelIcon } from "@/components/level-icon"
@@ -68,8 +68,28 @@ function GalleryCoverPlaceholder({ label, icon: Icon = ImageIcon }: { label: str
 }
 
 function GalleryCoverImage({ src, title }: { src: string; title: string }) {
+  const imageRef = useRef<HTMLImageElement | null>(null)
   const [hasLoadError, setHasLoadError] = useState(false)
   const [imageLoaded, setImageLoaded] = useState(false)
+
+  useEffect(() => {
+    const image = imageRef.current
+    if (!image) {
+      return
+    }
+
+    if (!image.complete) {
+      return
+    }
+
+    if (image.naturalWidth > 0) {
+      setImageLoaded(true)
+      return
+    }
+
+    setHasLoadError(true)
+    setImageLoaded(true)
+  }, [src])
 
   if (hasLoadError) {
     return <GalleryCoverPlaceholder label="封面暂不可用" icon={ImageOff} />
@@ -80,6 +100,7 @@ function GalleryCoverImage({ src, title }: { src: string; title: string }) {
       {!imageLoaded ? <Skeleton aria-hidden="true" className="absolute inset-0 rounded-none" /> : null}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
+        ref={imageRef}
         src={src}
         alt={title}
         title={title}

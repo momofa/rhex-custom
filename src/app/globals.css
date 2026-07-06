@@ -1226,7 +1226,7 @@
     }
 
     html[data-sidebar-collapsed='true'] .forum-page-shell:is([data-sidebar-display-mode='default'], [data-sidebar-display-mode='tree']) .forum-page-main .post-gallery-grid {
-      grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+      column-width: 14rem;
     }
 
     .forum-page-shell[data-sidebar-display-mode='docked'] .forum-page-sidebar-docked,
@@ -1345,13 +1345,14 @@
   }
 
   .post-gallery-grid {
-    display: grid;
-    align-items: start;
-    gap: 0.5rem;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 15.5rem), 1fr));
+    column-gap: 0.5rem;
+    column-width: 15.5rem;
   }
 
   .post-gallery-card {
+    break-inside: avoid;
+    display: inline-block;
+    margin-bottom: 0.5rem;
     width: 100%;
   }
 

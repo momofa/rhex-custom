@@ -15,6 +15,7 @@ node_modules
 
 backups
 artifacts
+tools
 
 # Exclude persisted runtime data at the project root only.
 # Keep the leading slash: unanchored patterns such as uploads/** also match

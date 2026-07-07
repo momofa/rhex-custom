@@ -1349,6 +1349,13 @@
     column-width: 15.5rem;
   }
 
+  @media (max-width: 1023px) {
+    .post-gallery-grid {
+      column-count: 2;
+      column-width: auto;
+    }
+  }
+
   .post-gallery-card {
     break-inside: avoid;
     display: inline-block;

@@ -49,6 +49,7 @@ import {
 import { getHomeSidebarHotTopics } from "@/lib/home-sidebar"
 import { groupHomeSidebarPanels } from "@/lib/home-sidebar-layout"
 import { getHomeSidebarStats } from "@/lib/home-sidebar-stats"
+import { POST_LIST_DISPLAY_MODE_GALLERY } from "@/lib/post-list-display"
 import { POST_LIST_LOAD_MODE_INFINITE } from "@/lib/post-list-load-mode"
 import {
   attachPostListTipSummaries,
@@ -310,6 +311,7 @@ export async function HomeFeedPage({
         ]
       : [],
   )
+  const shouldShowRightSidebar = settings.homeFeedPostListDisplayMode !== POST_LIST_DISPLAY_MODE_GALLERY
 
   const sortBeforeSlot =
     currentSort === "new"
@@ -488,7 +490,7 @@ export async function HomeFeedPage({
                 {currentSort ? <AddonSlotRenderer slot={sortAfterSlot} props={feedSlotProps} /> : null}
               </div>
             )}
-            rightSidebar={(
+            rightSidebar={shouldShowRightSidebar ? (
               <div className="mt-6 hidden pb-12 lg:block">
                 <AddonSlotRenderer slot="feed.sidebar.before" props={feedSlotProps} />
                 <AddonSurfaceRenderer
@@ -524,7 +526,7 @@ export async function HomeFeedPage({
                 </AddonSurfaceRenderer>
                 <AddonSlotRenderer slot="feed.sidebar.after" props={feedSlotProps} />
               </div>
-            )}
+            ) : null}
           />
         </AddonSurfaceRenderer>
         <AddonSlotRenderer slot="feed.page.after" props={feedSlotProps} />

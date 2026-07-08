@@ -15,14 +15,54 @@ const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const dynamic = "force-dynamic"
 
+const rootInitStyles = `
+  @keyframes root-boot-spinner {
+    to {
+      transform: translate(-50%, -50%) rotate(360deg);
+    }
+  }
+
+  html[data-root-init="pending"] {
+    overflow: hidden;
+  }
+
+  html[data-root-init="pending"] body {
+    visibility: hidden;
+    overflow: hidden;
+  }
+
+  html[data-root-init="pending"]::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 9998;
+    background: hsl(var(--background, 0 0% 100%));
+  }
+
+  html[data-root-init="pending"]::after {
+    content: "";
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 9999;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 9999px;
+    border: 2px solid hsl(var(--border, 0 0% 88%));
+    border-top-color: hsl(var(--primary, 0 0% 12%));
+    transform: translate(-50%, -50%);
+    animation: root-boot-spinner 0.72s linear infinite;
+  }
+`
+
 const noScriptRootInitStyles = `
   html[data-root-init="pending"] {
     overflow: auto;
   }
 
   html[data-root-init="pending"] body {
-    visibility: visible;
-    overflow: visible;
+    visibility: visible !important;
+    overflow: visible !important;
   }
 
   html[data-root-init="pending"]::before,
@@ -47,11 +87,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       data-root-init="pending"
     >
       <head>
+        <style>{rootInitStyles}</style>
         <noscript>
           <style>{noScriptRootInitStyles}</style>
         </noscript>
       </head>
-      <body>
+      <body style={{ visibility: "hidden", overflow: "hidden" }}>
         <Suspense fallback={null}>
           <RootRuntimeProviders>{children}</RootRuntimeProviders>
         </Suspense>

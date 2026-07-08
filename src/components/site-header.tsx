@@ -58,7 +58,7 @@ export async function SiteHeader() {
               <Link href="/" className="flex items-center gap-2 text-xl leading-none">
                 <SiteLogoMark logoPath={settings.siteLogoPath} iconPath={settings.siteIconPath} />
                 {settings.siteLogoText && settings.siteLogoText.trim() !== "" ? (
-                  <div className="hidden font-bold tracking-tight sm:inline-block">{settings.siteLogoText}</div>
+                  <div className="hidden shrink-0 whitespace-nowrap font-bold tracking-tight sm:inline-block">{settings.siteLogoText}</div>
                 ) : null}
               </Link>
             </div>

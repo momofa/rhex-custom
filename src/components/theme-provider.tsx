@@ -172,6 +172,8 @@ function ThemeRuntimeSync({
         themeSettings ?? DEFAULT_THEME_RUNTIME_SETTINGS,
       )
     } finally {
+      document.body.style.removeProperty("visibility")
+      document.body.style.removeProperty("overflow")
       document.documentElement.setAttribute("data-root-init", "ready")
     }
   }, [

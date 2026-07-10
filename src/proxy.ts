@@ -13,6 +13,17 @@ const PATH_HOME_FEED_SORTS: Record<string, HomeFeedSort> = {
   "/hot": "hot",
 }
 
+const FORUM_DOCUMENT_CACHE_CONTROL = "private, no-cache, max-age=0, must-revalidate"
+
+function isDocumentRequest(request: NextRequest) {
+  if (request.method !== "GET" && request.method !== "HEAD") {
+    return false
+  }
+
+  return request.headers.get("sec-fetch-dest") === "document"
+    || request.headers.get("accept")?.includes("text/html") === true
+}
+
 function redirectLegacyHomeFeedPageQuery(request: NextRequest) {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return null
@@ -40,11 +51,17 @@ function nextWithRequestContext(request: NextRequest) {
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set(RHEX_PATHNAME_HEADER, request.nextUrl.pathname)
 
-  return NextResponse.next({
+  const response = NextResponse.next({
     request: {
       headers: requestHeaders,
     },
   })
+
+  if (isForumContentPath(request.nextUrl.pathname) && isDocumentRequest(request)) {
+    response.headers.set("Cache-Control", FORUM_DOCUMENT_CACHE_CONTROL)
+  }
+
+  return response
 }
 
 async function isForumBrowseProtectedPath(pathname: string) {

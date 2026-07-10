@@ -1,22 +1,25 @@
 import type { Metadata } from "next"
 
-import {
-  generateAddonHomeFeedMetadata,
-  generateHomeFeedMetadata,
-  HomeFeedPage,
-} from "@/app/home-feed-page"
+import { HomeFeedPage } from "@/app/home-feed-page"
 import { listAddonHomeFeedTabs } from "@/lib/addon-home-feed-providers"
 import { resolveDefaultAddonHomeFeedTab } from "@/lib/home-feed-tabs"
+import { getSiteSettings } from "@/lib/site-settings"
 
 export const revalidate = 30
 
 export async function generateMetadata(): Promise<Metadata> {
-  const defaultAddonTab = resolveDefaultAddonHomeFeedTab(await listAddonHomeFeedTabs())
-  if (defaultAddonTab) {
-    return generateAddonHomeFeedMetadata(defaultAddonTab.slug, "/")
-  }
+  const settings = await getSiteSettings()
+  const title = `${settings.siteName} - ${settings.siteSlogan}`
 
-  return generateHomeFeedMetadata("latest")
+  return {
+    title,
+    description: settings.siteDescription,
+    openGraph: {
+      title,
+      description: settings.siteDescription,
+      type: "website",
+    },
+  }
 }
 
 export default async function HomePage() {
@@ -28,6 +31,3 @@ export default async function HomePage() {
 
   return <HomeFeedPage sort="latest" autoCheckInOnEnter />
 }
-
-
-

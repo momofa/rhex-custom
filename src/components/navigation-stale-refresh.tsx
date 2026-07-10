@@ -38,18 +38,18 @@ export function NavigationStaleRefresh() {
   }, [pathname, router])
 
   useEffect(() => {
-    function refreshIfNeeded(force = false) {
+    function refreshIfNeeded() {
       const currentPath = window.location.pathname
       const marker = readContentMutationMarker()
       const handledMarker = Math.max(
         handledMarkersByPathRef.current.get(currentPath) ?? 0,
         readContentMutationRefreshMarker(currentPath),
       )
-      if (!marker || (!force && marker === handledMarker)) {
+      if (!marker || marker === handledMarker) {
         return
       }
 
-      const consumedMarker = consumeContentMutationRefresh(currentPath, { force })
+      const consumedMarker = consumeContentMutationRefresh(currentPath)
       if (!consumedMarker) {
         return
       }
@@ -58,8 +58,8 @@ export function NavigationStaleRefresh() {
       router.refresh()
     }
 
-    function handlePageShow(event: PageTransitionEvent) {
-      refreshIfNeeded(event.persisted)
+    function handlePageShow() {
+      refreshIfNeeded()
     }
 
     function handleFocus() {

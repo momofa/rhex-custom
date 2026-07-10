@@ -215,7 +215,7 @@ export async function SiteHeader() {
   const logoSize = await getSiteLogoDisplaySize(settings.siteLogoPath)
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/70 bg-background/80 backdrop-blur-sm supports-backdrop-filter:bg-background/60">
+    <header className="relative z-50 w-full border-b border-border/70 bg-background sm:sticky sm:top-0 sm:bg-background/80 sm:backdrop-blur-sm">
       <div className="mx-auto max-w-[1200px] px-1">
         <AddonSlotRenderer slot="layout.header.before" props={{ settings }} />
         <AddonSurfaceRenderer surface="layout.header" props={{ settings }}>

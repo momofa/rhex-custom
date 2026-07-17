@@ -383,6 +383,10 @@ Rhex/
 3. 提交修改
 4. 发起 PR
 
+## 发布与镜像
+
+正式版本统一通过 GitHub `main` 分支和 GitHub Actions 构建、发布 GHCR 镜像。版本更新、提交、镜像验证、生产部署与回滚步骤请遵循 [GitHub 发布与 Docker 镜像流程](docs/release-process.md)。
+
 ## License
 
 本项目基于 [MIT License](./LICENSE) 开源。

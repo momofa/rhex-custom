@@ -12,6 +12,7 @@ interface UserAvatarProps {
   name: string
   avatarPath?: string | null
   size?: "xs" | "sm" | "md" | "lg" | "xl" | "2xl"
+  className?: string
   isVip?: boolean
   vipLevel?: number | null
 }
@@ -81,7 +82,7 @@ function AvatarImage({
   )
 }
 
-export function UserAvatar({ name, avatarPath, size = "md", isVip = false, vipLevel }: UserAvatarProps) {
+export function UserAvatar({ name, avatarPath, size = "md", className, isVip = false, vipLevel }: UserAvatarProps) {
   const hasCustomAvatar = Boolean(avatarPath?.trim())
   const avatarUrl = getAvatarUrl(avatarPath, name)
   const fallback = getAvatarFallback(name)
@@ -92,7 +93,7 @@ export function UserAvatar({ name, avatarPath, size = "md", isVip = false, vipLe
   const showTextFallback = !hasCustomAvatar || imageFailed
 
   return (
-    <div className={cn("group/avatar relative aspect-square shrink-0", sizeClasses[size])}>
+    <div className={cn("group/avatar relative aspect-square shrink-0", sizeClasses[size], className)}>
       <div className="relative h-full w-full overflow-hidden rounded-xl bg-card" style={{ backgroundColor: colors.background, color: colors.foreground }}>
         {showTextFallback ? (
           <div className={cn("flex h-full w-full items-center justify-center font-semibold tracking-wide", fallbackSizeClasses[size])}>

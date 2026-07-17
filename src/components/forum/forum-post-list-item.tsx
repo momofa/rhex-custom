@@ -121,7 +121,7 @@ export function ForumPostListItem({
     <div className={cn(
       compactFirstItem ? "flex gap-2.5 pb-3 sm:gap-3" : "flex gap-2.5 py-3 sm:gap-3",
       hideDivider ? "border-b-0" : "border-b last:border-b-0",
-      "px-1.5 transition-all duration-150 hover:bg-accent hover:shadow-xs sm:px-3",
+      "px-1.5 transition-all duration-150 hover:bg-accent/45 hover:shadow-xs sm:px-3",
     )}>
       <UserProfilePreviewCardTrigger
         username={item.authorUsername}
@@ -129,20 +129,20 @@ export function ForumPostListItem({
         avatarPath={item.authorAvatarPath}
         isVip={item.authorIsVip}
         vipLevel={item.authorVipLevel}
-        triggerClassName={cn("shrink-0 self-end", isRestrictedAuthor && "grayscale")}
+        triggerClassName={cn("shrink-0 self-center", isRestrictedAuthor && "grayscale")}
         align="start"
       >
         <UserAvatar name={item.authorName} avatarPath={item.authorAvatarPath} size="md" isVip={item.authorIsVip} vipLevel={item.authorVipLevel} />
       </UserProfilePreviewCardTrigger>
 
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-1 sm:gap-1.5">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1 sm:gap-1.5">
+        <div className="flex items-center gap-1 sm:gap-1.5">
+          <div className="flex min-w-0 flex-1 items-center gap-1 sm:gap-1.5">
             <PostTypeBadge type={item.type} label={item.typeLabel} compact mobileIconOnly />
             <PostStatusBadge status={item.status} label={item.statusLabel} reviewNote={item.reviewNote} compact />
             {showPinBadge ? <PostPinBadge scope={item.pinScope} label={item.pinLabel} compact /> : null}
             {item.isFeatured ? <span className="inline-flex h-5 items-center rounded-[4px] bg-emerald-100 px-1.5 text-[10px] leading-none text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200 sm:px-2 sm:text-[11px]">精华</span> : null}
-            <PostListLink href={postPath} visitedPath={postPath} dimWhenRead className="min-w-0">
+            <PostListLink href={postPath} visitedPath={postPath} dimWhenRead className="min-w-0 flex-1">
               <h2 className={getPostTitleClassName({ isFeatured: item.isFeatured, pinScope: item.pinScope, compact: true })}>
                 {item.title}
               </h2>

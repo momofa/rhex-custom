@@ -90,11 +90,11 @@ export async function SiteFooter() {
   const footerBrandingVisible = settings.footerBrandingVisible === undefined || settings.footerBrandingVisible?true:false
 
   return (
-    <footer>
-      <div className="mx-auto max-w-[1200px] px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom))] pt-6 sm:px-6 sm:pb-8 lg:px-1">
+    <footer className="mt-10 border-t border-border/55 sm:mt-14">
+      <div className="mx-auto max-w-[1200px] px-1 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-4 sm:pb-4">
         <AddonSlotRenderer slot="layout.footer.before" />
         <AddonSurfaceRenderer surface="layout.footer" props={{ footerBrandingVisible, footerCopyrightText, settings }}>
-        <div className="rounded-xl bg-background px-5 py-5 sm:px-6">
+        <div className="rounded-xl bg-background pb-2">
           <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
             <div className="max-w-lg">
               <div className="flex items-center gap-3">

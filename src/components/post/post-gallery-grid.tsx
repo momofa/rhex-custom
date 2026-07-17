@@ -157,8 +157,8 @@ function resolveGalleryColumnCount(width: number, viewportWidth: number) {
     return 2
   }
 
-  const targetColumnWidth = 232
-  const columnGap = 8
+  const targetColumnWidth = 224
+  const columnGap = 16
   return Math.max(1, Math.floor((width + columnGap) / (targetColumnWidth + columnGap)))
 }
 

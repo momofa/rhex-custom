@@ -1360,7 +1360,7 @@
   .post-gallery-grid {
     display: flex;
     align-items: flex-start;
-    gap: 0.5rem;
+    gap: calc(0.5rem * 2);
   }
 
   .post-gallery-column {
@@ -1368,7 +1368,7 @@
     min-width: 0;
     flex: 1 1 0;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: calc(0.5rem * 2);
   }
 
   .post-gallery-card {
